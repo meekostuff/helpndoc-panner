@@ -1,0 +1,157 @@
+<%
+var
+	aTopicList: THndTopicsInfoArray;
+	aKeywordList: THndKeywordsInfoArray;
+	nBlocLevel: integer = 0;
+	nCurTopic, nTopicKind, nCurTopicLevel, nDif, nClose, nCurTopicChildrenCnt, nCurTopicIcon: integer;
+	nCurKeyword, nCurKeywordLevel, nCurKeywordChildrenCnt, nCurKeywordTopic: integer;
+	sTopicUrl, sCurrentKeyword, sTopicClass, sTopicIconData, sKeywordClass, sKeywordLink, sKeywordOnClick, sKeywordOnCData: string;
+	aAssociatedTopics: array of string;
+	sProjectTitle, sDefaultTopicId, sProjectTopic, sProjectTopicId, sProjectFooter: string;
+
+begin
+	// Need BOM for UTF8 files
+	HndGeneratorInfo.BOMOutput := True;
+	// Try to get the default topic
+	sDefaultTopicId := HndProjectsMeta.GetItemMetaStringValue('DefaultTopic', '');
+	// None defined: the first one is the default topic
+	if (sDefaultTopicId = '') then
+		sDefaultTopicId := HndTopics.GetTopicNextVisible(HndTopics.GetProjectTopic());
+	if (sDefaultTopicId <> '') then
+		sDefaultTopicId := HndTopics.GetTopicHelpId(sDefaultTopicId);
+	// footer
+	sProjectTopic := HndTopics.GetProjectTopic();
+	sProjectTopicId := 'index';
+	sProjectFooter := HndTopics.GetTopicFooterTextCalculated(sProjectTopic);
+%>
+
+<!DOCTYPE html>
+<html class="toc">
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="generator" content="<% print(HTMLEncode(HndGeneratorInfo.HelpNDocVersion)); %>">
+	<title><% print(HTMLEncode(HndProjects.GetProjectTitle())); %> - Table of Contents</title>
+	<link rel="stylesheet" type="text/css" href="basic.css" />
+</head>
+
+<body>
+
+	<div id="topic_header">
+		<div id="topic_header_content">
+			<h1 id="topic_header_text"><% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocTitle'))); %></h1>
+		</div>
+		
+		<%
+			if HndGeneratorInfo.GetCustomSettingValue('ShowNavigation') then
+			begin
+		%>
+		<div id="topic_header_nav">
+			<%
+				if (sProjectTopicId <> '') then
+				begin
+			%>
+			
+			<a rel="home" href="<% printf('%s.html', [sProjectTopicId]); %>"><img src="img/arrow_up.png" alt="Parent"/></a>
+
+			<%
+				end;
+				if (sDefaultTopicId <> '') then
+				begin
+			%>
+			
+			<a rel="first" href="<% printf('%s.html', [sDefaultTopicId]); %>"><img src="img/arrow_right.png" alt="Next"/></a>
+			
+			<%
+				end;
+			%>
+		</div>
+		<%
+			end;
+		%>
+
+	</div>
+	
+	<div id="topic_content">
+
+		<ul id="toc" class="">
+
+				<%
+					nBlocLevel := 0;
+					aTopicList := HndTopics.GetTopicListVisible(False);
+					for nCurTopic := 0 to length(aTopicList) - 1 do
+					begin
+						HndGeneratorInfo.CurrentTopic := aTopicList[nCurTopic].id;
+						nTopicKind := aTopicList[nCurTopic].Kind;
+						nCurTopicLevel := HndTopics.GetTopicLevel(HndGeneratorInfo.CurrentTopic);
+						nCurTopicChildrenCnt := HndTopics.GetTopicDirectChildrenCountVisible(HndGeneratorInfo.CurrentTopic);
+						nCurTopicIcon := HndTopics.GetTopicIconIndex(HndGeneratorInfo.CurrentTopic);
+						
+						// Topic URL
+						if nTopicKind = 2 then sTopicUrl := HndTopics.GetTopicUrlLink(HndGeneratorInfo.CurrentTopic)  // Link to URL
+						else if nTopicKind = 1 then sTopicUrl := '#" onclick="return false;'  // Empty
+						else sTopicUrl := format('%s.html', [aTopicList[nCurTopic].HelpId]);  // Normal topic
+						
+						// Close the previous topics
+						if ((nCurTopic > 0) and (nCurTopicLevel < HndTopics.GetTopicLevel(aTopicList[nCurTopic - 1].id))) then
+						begin
+							nDif := HndTopics.GetTopicLevel(aTopicList[nCurTopic - 1].id) - nCurTopicLevel;
+							for nClose := 0 to nDif - 1 do
+							begin
+								print('</ul></li>');
+								nBlocLevel := nBlocLevel - 1;
+							end;
+						end;
+						
+						// Topic class
+						if nCurTopicChildrenCnt > 0 then sTopicClass := 'folder'
+						else sTopicClass := '';
+						
+				%>
+
+						<li class="<% print(sTopicClass); %>" id="<% print(aTopicList[nCurTopic].HelpId); %>">
+							<a href="<% print(sTopicUrl); %>">
+								<% print(HTMLEncode(aTopicList[nCurTopic].caption)); %>
+							</a>
+
+				<%
+						if (nCurTopicChildrenCnt > 0) then
+						begin
+							print('<ul>');
+							nBlocLevel := nBlocLevel + 1;
+						end
+						else begin
+							print('</li>');
+						end;
+						
+						// Close the last topic
+						if (HndTopics.GetTopicNextVisible(HndGeneratorInfo.CurrentTopic) = '') then
+						begin
+							while nBlocLevel > 0 do
+							begin
+								print('</ul></li>');
+								nBlocLevel := nBlocLevel - 1;
+							end;
+						end;
+					
+					end;
+				%>
+				
+				</ul>
+
+	</div>
+
+	<div id="topic_footer">
+
+		<div id="topic_footer_content">
+			<% print(HTMLEncode(sProjectFooter)); %>
+		</div>
+	</div>
+	
+</body>
+
+</html>
+
+<%
+end.
+%>

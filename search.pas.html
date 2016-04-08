@@ -1,0 +1,100 @@
+<%
+var
+	aTopicList: THndTopicsInfoArray;
+	aKeywordList: THndKeywordsInfoArray;
+	nBlocLevel: integer = 0;
+	nCurTopic, nTopicKind, nCurTopicLevel, nDif, nClose, nCurTopicChildrenCnt, nCurTopicIcon: integer;
+	nCurKeyword, nCurKeywordLevel, nCurKeywordChildrenCnt, nCurKeywordTopic: integer;
+	sTopicUrl, sCurrentKeyword, sTopicClass, sTopicIconData, sKeywordClass, sKeywordLink, sKeywordOnClick, sKeywordOnCData: string;
+	aAssociatedTopics: array of string;
+	sProjectTitle, sDefaultTopicId, sProjectTopic, sProjectTopicId, sProjectFooter: string;
+
+begin
+	// Need BOM for UTF8 files
+	HndGeneratorInfo.BOMOutput := True;
+	// Try to get the default topic
+	sDefaultTopicId := HndProjectsMeta.GetItemMetaStringValue('DefaultTopic', '');
+	// None defined: the first one is the default topic
+	if (sDefaultTopicId = '') then
+		sDefaultTopicId := HndTopics.GetTopicNextVisible(HndTopics.GetProjectTopic());
+	if (sDefaultTopicId <> '') then
+		sDefaultTopicId := HndTopics.GetTopicHelpId(sDefaultTopicId);
+	// footer
+	sProjectTopic := HndTopics.GetProjectTopic();
+	sProjectTopicId := 'index';
+	sProjectFooter := HndTopics.GetTopicFooterTextCalculated(sProjectTopic);
+%>
+
+<!DOCTYPE html>
+<html class="search">
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="generator" content="<% print(HTMLEncode(HndGeneratorInfo.HelpNDocVersion)); %>">
+	<title><% print(HTMLEncode(HndProjects.GetProjectTitle())); %> - Table of Contents</title>
+	<link rel="stylesheet" type="text/css" href="basic.css" />
+</head>
+
+<body>
+
+	<div id="topic_header">
+		<div id="topic_header_content">
+			<h1 id="topic_header_text"><% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocSearchTitle'))); %></h1>
+		</div>
+		
+		<%
+			if HndGeneratorInfo.GetCustomSettingValue('ShowNavigation') then
+			begin
+		%>
+		<div id="topic_header_nav">
+			<%
+				if (sProjectTopicId <> '') then
+				begin
+			%>
+			
+			<a rel="home" href="<% printf('%s.html', [sProjectTopicId]); %>"><img src="img/arrow_up.png" alt="Parent"/></a>
+			
+			<%
+				end;
+				if (sDefaultTopicId <> '') then
+				begin
+			%>
+			
+			<a rel="first" href="<% printf('%s.html', [sDefaultTopicId]); %>"><img src="img/arrow_right.png" alt="Next"/></a>
+			
+			<%
+				end;
+			%>
+		</div>
+		<%
+			end;
+		%>
+
+	</div>
+	
+	<div id="topic_content">
+		<div id="tab-search">
+			<form onsubmit="PerformSearch(); return false;">
+				<label for="search_value"><% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocSearchTitle'))); %>:</label>
+				<input id="search_value" name="search_value"></input>
+				<input type="submit" value="<% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocSearchTitle'))); %>"/>
+			</form>
+			<div id="search_results"></div>
+		</div>
+	</div>
+
+
+	<div id="topic_footer">
+
+		<div id="topic_footer_content">
+			<% print(HTMLEncode(sProjectFooter)); %>
+		</div>
+	</div>
+	
+</body>
+
+</html>
+
+<%
+end.
+%>

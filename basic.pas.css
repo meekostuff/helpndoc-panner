@@ -1,0 +1,30 @@
+<%	
+begin
+	// Need BOM for UTF8 files
+	HndGeneratorInfo.BOMOutput := True;
+%>	
+
+
+@import url(css/reset.css);
+@import url(css/base.css);
+@import url(css/hnd.css);
+
+html {
+	background-color: #888;
+}
+
+body {
+	background-color: #fff;
+	max-width: 120ex;
+	margin: 1em auto;
+}
+
+#topic_header {
+	background-color: #<% print(TColorToHex(HndGeneratorInfo.GetCustomSettingValue('BaseColor'))); %>;
+}
+#topic_content {
+	max-width: 80ex;
+	margin: 0 auto;
+}
+	
+<% end. %>

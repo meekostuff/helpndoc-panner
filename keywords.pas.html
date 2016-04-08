@@ -1,0 +1,173 @@
+<%
+var
+	aTopicList: THndTopicsInfoArray;
+	aKeywordList: THndKeywordsInfoArray;
+	nBlocLevel: integer = 0;
+	nCurTopic, nTopicKind, nCurTopicLevel, nDif, nClose, nCurTopicChildrenCnt, nCurTopicIcon: integer;
+	nCurKeyword, nCurKeywordLevel, nCurKeywordChildrenCnt, nCurKeywordTopic: integer;
+	sTopicUrl, sCurrentKeyword, sTopicClass, sTopicIconData, sKeywordClass, sKeywordLink, sKeywordOnClick, sKeywordOnCData: string;
+	sProjectTitle, sDefaultTopicId, sProjectTopic, sProjectTopicId, sProjectFooter: string;
+	aAssociatedTopics: array of string;
+
+begin
+	// Need BOM for UTF8 files
+	HndGeneratorInfo.BOMOutput := True;
+	// Try to get the default topic
+	sDefaultTopicId := HndProjectsMeta.GetItemMetaStringValue('DefaultTopic', '');
+	// None defined: the first one is the default topic
+	if (sDefaultTopicId = '') then
+		sDefaultTopicId := HndTopics.GetTopicNextVisible(HndTopics.GetProjectTopic());
+	if (sDefaultTopicId <> '') then
+		sDefaultTopicId := HndTopics.GetTopicHelpId(sDefaultTopicId);
+	// footer
+	sProjectTopic := HndTopics.GetProjectTopic();
+	sProjectTopicId := 'index';
+	sProjectFooter := HndTopics.GetTopicFooterTextCalculated(sProjectTopic);
+%>
+
+<!DOCTYPE html>
+<html class="keywords">
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="generator" content="<% print(HTMLEncode(HndGeneratorInfo.HelpNDocVersion)); %>">
+	<title><% print(HTMLEncode(HndProjects.GetProjectTitle())); %> - Table of Contents</title>
+	<link rel="stylesheet" type="text/css" href="basic.css" />
+</head>
+
+<body>
+	<div id="topic_header">
+		<div id="topic_header_content">
+			<h1 id="topic_header_text"><% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocKeywordsTitle'))); %></h1>
+		</div>
+
+		<%
+			if HndGeneratorInfo.GetCustomSettingValue('ShowNavigation') then
+			begin
+		%>
+		<div id="topic_header_nav">
+			<%
+				if (sProjectTopicId <> '') then
+				begin
+			%>
+			
+			<a rel="home" href="<% printf('%s.html', [sProjectTopicId]); %>"><img src="img/arrow_up.png" alt="Parent"/></a>
+			
+			<%
+				end;
+				if (sDefaultTopicId <> '') then
+				begin
+			%>
+			
+			<a rel="first" href="<% printf('%s.html', [sDefaultTopicId]); %>"><img src="img/arrow_right.png" alt="Next"/></a>
+			
+			<%
+				end;
+			%>
+		</div>
+		<%
+			end;
+		%>
+
+	</div>
+	
+	<div id="topic_content">
+			<ul id="keywords">
+				<%
+					nBlocLevel := 0;
+					aKeywordList := HndKeywords.GetKeywordList(False);
+					for nCurKeyword := 0 to length(aKeywordList) - 1 do
+					begin
+						sCurrentKeyword := aKeywordList[nCurKeyword].id;
+						nCurKeywordLevel := HndKeywords.GetKeywordLevel(sCurrentKeyword);
+						nCurKeywordChildrenCnt := HndKeywords.GetKeywordDirectChildrenCount(sCurrentKeyword);
+						
+						aAssociatedTopics := HndTopicsKeywords.GetTopicsAssociatedWithKeyword(sCurrentKeyword);
+						if Length(aAssociatedTopics) > 0 then
+						begin
+							sKeywordLink := format('%s.html', [HndTopics.GetTopicHelpId(aAssociatedTopics[0])]);
+							sKeywordOnCData := '[';
+							sKeywordOnClick := '[';
+							for nCurKeywordTopic := 0 to Length(aAssociatedTopics) - 1 do
+							begin
+								if nCurKeywordTopic > 0 then
+								begin
+									sKeywordOnCData := sKeywordOnCData + ',';
+									sKeywordOnClick := sKeywordOnClick + ',';
+								end;
+								sKeywordOnCData := sKeywordOnCData + format('[\''%s\'',\''%s.html\'']', [StringReplace(HTMLEncode(HndTopics.GetTopicCaption(aAssociatedTopics[nCurKeywordTopic])), '''', '\\\''', [rfReplaceAll]), HndTopics.GetTopicHelpId(aAssociatedTopics[nCurKeywordTopic])]);
+								sKeywordOnClick := sKeywordOnClick + format('[''%s'',''%s.html'']', [StringReplace(HTMLEncode(HndTopics.GetTopicCaption(aAssociatedTopics[nCurKeywordTopic])), '''', '\''', [rfReplaceAll]), HndTopics.GetTopicHelpId(aAssociatedTopics[nCurKeywordTopic])]);
+							end;
+							sKeywordOnCData := sKeywordOnCData + ']';
+							sKeywordOnClick := sKeywordOnClick + ']';
+						end
+						else begin
+							sKeywordLink := '#';
+							sKeywordOnCData := '[]';
+							sKeywordOnClick := '[]';
+						end;
+						
+						// Close the previous keywords
+						if ((nCurKeyword > 0) and (nCurKeywordLevel < HndKeywords.GetKeywordLevel(aKeywordList[nCurKeyword - 1].id))) then
+						begin
+							nDif := HndKeywords.GetKeywordLevel(aKeywordList[nCurKeyword - 1].id) - nCurKeywordLevel;
+							for nClose := 0 to nDif - 1 do
+							begin
+							  print('</ul></li>');
+							  nBlocLevel := nBlocLevel - 1;
+							end;
+						end;
+						
+						// Keyword class
+						if nCurKeywordChildrenCnt > 0 then sKeywordClass := 'folder'
+						else sKeywordClass := 'file';
+				%>
+
+						<li class="<% print(sKeywordClass); %>" data="click:'<% print(sKeywordOnCData); %>'">
+							<a
+								href="<% print(sKeywordLink); %>"
+								onClick="<% print(sKeywordOnClick); %>"
+							    >
+								<% print(aKeywordList[nCurKeyword].caption);%>
+							</a>
+
+				<%
+						if (nCurKeywordChildrenCnt > 0) then
+						begin
+							print('<ul>');
+							nBlocLevel := nBlocLevel + 1;
+						end
+						else begin
+							print('</li>');
+						end;
+						
+						// Close the last keyword
+						if (HndKeywords.GetKeywordNext(sCurrentKeyword) = '') then
+						begin
+							while nBlocLevel > 0 do
+							begin
+								print('</ul></li>');
+								nBlocLevel := nBlocLevel - 1;
+							end;
+						end;
+					
+					end;
+				%>
+				
+			</ul>
+	</div>		
+
+
+	<div id="topic_footer">
+
+		<div id="topic_footer_content">
+			<% print(HTMLEncode(sProjectFooter)); %>
+		</div>
+	</div>
+</body>
+
+</html>
+
+<%
+end.
+%>
