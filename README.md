@@ -50,7 +50,7 @@ call Chrome from the command-line with
 
 
 ```
-\path\to\chrome.exe --disable-web-security --user-data-dir \path\to\HelpNDoc\Output
+\path\to\chrome.exe --allow-file-access-from-files
 ```
 
 
