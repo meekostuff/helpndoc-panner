@@ -13,6 +13,7 @@ Meeko.options = { // these are the default values
 	"no_boot": false, // a debugging option. Abandon boot immediately. 
 	"no_frameset": false, // use feature / browser detection to set this true. Also disables capturing. 
 	"no_style": false, // a demo option. `no_frameset` plus remove all stylesheets. 
+	"file_access_from_files": false, // whether to support file: URLs when possible
 	"capturing": true, // false, "auto", true, "strict"
 	"log_level": "warn", // debug, info, warn, error, none
 	"hidden_timeout": 3000,
