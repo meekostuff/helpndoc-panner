@@ -38,7 +38,7 @@ you won't get the frameset view.
 Testing
 -------
 
-All modern browsers have significant restrictions on using AJAX with the local file-system - that is, when using the `file:` protocol. Because HyperFrameset depends on AJAX these restrictions could prevent HyperFrameset from working. 
+All modern browsers have significant restrictions on using AJAX with the local file-system - that is, when using the `file:` protocol. Because HyperFrameset depends on AJAX, these restrictions could prevent HyperFrameset from working. 
 
 If you want to view your generated documentation on your local machine it is recommended to run a minimal HTTP server. The following are only suggestions.
 
@@ -46,13 +46,12 @@ If you want to view your generated documentation on your local machine it is rec
 - [Fenix](http://fenixwebserver.com/)
 
 If you don't want to install a HTTP server then either use Firefox, or
-call Chrome from the command-line with
+call Chrome with the `allow-file-access-from-files` option:
 
-
-```
-\path\to\chrome.exe --allow-file-access-from-files
-```
-
-
-
+1. Click the Windows `Start` button
+2. Type the following into the Start Search Box
+	
+	```
+	chrome.exe --allow-file-access-from-files
+	```
 
