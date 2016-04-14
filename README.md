@@ -35,10 +35,10 @@ in general this means IE10+ -
 so in older browsers (or with Javascript disabled) 
 you won't get the frameset view.
 
-Testing
--------
+Testing Locally
+---------------
 
-All modern browsers have significant restrictions on using AJAX with the local file-system - that is, when using the `file:` protocol. Because HyperFrameset depends on AJAX, these restrictions could prevent HyperFrameset from working. 
+All modern browsers have significant restrictions on using AJAX with the local file-system - that is, when using the `file:` protocol. Because HyperFrameset depends on AJAX, these restrictions could prevent HyperFrameset from implementing the frameset view of your pages.
 
 If you want to view your generated documentation on your local machine it is recommended to run a minimal HTTP server. The following are only suggestions.
 
@@ -55,3 +55,4 @@ call Chrome with the `allow-file-access-from-files` option:
 	chrome.exe --allow-file-access-from-files
 	```
 
+<small>Read [How to run things locally](https://github.com/mrdoob/three.js/wiki/How-to-run-things-locally) for more details and tips.</small>
