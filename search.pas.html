@@ -73,14 +73,12 @@ begin
 	</div>
 	
 	<div id="topic_content">
-		<div id="tab-search">
-			<form onsubmit="PerformSearch(); return false;">
-				<label for="search_value"><% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocSearchTitle'))); %>:</label>
-				<input id="search_value" name="search_value"></input>
-				<input type="submit" value="<% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocSearchTitle'))); %>"/>
-			</form>
-			<div id="search_results"></div>
-		</div>
+		<form onsubmit="PerformSearch(); return false;">
+			<label for="search_value"><% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocSearchTitle'))); %>:</label>
+			<input id="search_value" name="search_value"></input>
+			<input type="submit" value="<% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocSearchTitle'))); %>"/>
+		</form>
+		<div id="search_results"></div>
 	</div>
 
 

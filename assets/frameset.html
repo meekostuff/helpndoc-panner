@@ -48,11 +48,8 @@ a:hover {
 </style>
 
 <!-- toc and topic styles -->
-<!--
 <link type="text/css" rel="stylesheet" media="all" href="css/silver-theme/jquery-ui-1.8.12.custom.css" />
 <link type="text/css" rel="stylesheet" media="all" href="css/dynatree/chm/ui.dynatree.css" />
-<link type="text/css" rel="stylesheet" media="all" href="basic.css" />	
--->
 <link type="text/css" rel="stylesheet" media="all" href="css/reset.css" />
 <link type="text/css" rel="stylesheet" media="all" href="css/base.css" />
 <link type="text/css" rel="stylesheet" media="all" href="css/hnd.css" />
@@ -60,28 +57,30 @@ a:hover {
 
 <!-- override toc styles -->
 <style> /* #mk_toc is needed to win the specificity */
-#mk_toc #tabs .ui-tabs-nav { position: static; }
-#mk_toc #tabs .ui-tabs-panel { position: static; }
+#tabs .ui-tabs-nav { position: static; }
+#tabs .ui-tabs-panel { position: static; }
 </style>
 
-<script src="../../DOMSprockets/ARIA.js"></script>
-
 <!-- toc.html -->
-<!--
 <script type="text/javascript" src="js/jquery.min.js"></script>
 <script type="text/javascript" src="js/jquery-ui-1.8.17.custom.min.js"></script>
 <script type="text/javascript" src="js/jquery.cookie.js"></script>
+<!--
 <script type="text/javascript" src="js/jquery.dynatree.min.js"></script>
+-->
+<script type="text/javascript" src="js/jquery.dynatree.js"></script>
 <script type="text/javascript" src="js/hndjsse.js"></script>
 <script type="text/javascript">
 
 	window.bSearchDataLoaded = false;
 	var sHelpIdToActivate = '';
 
+	setTimeout(navInit, 5000);
+
 	function navInit()
 	{
 		var sAnchorName = '';
-		try { sAnchorName = top.location.href.substring(top.location.href.lastIndexOf("#") + 1, top.location.href.length); }
+		try { sAnchorName = location.hash.substr(1); }
 		catch(err) { sAnchorName = ''; }
 		var nSelectedTab = 0;
 		if (sAnchorName == '_index') nSelectedTab = 1
@@ -92,30 +91,32 @@ a:hover {
 		});
 		
 		// Toc
-		if ($("#tab-toc").length) {
-			$("#tab-toc").dynatree({
+		if ($("#tree-toc").length) {
+			$("#tree-toc").dynatree({
 				clickFolderMode: 1,
 				debugLevel: 0,
 				imagePath: 'css/dynatree/chm/',
 				onActivate: function(node){
-					//if ($("#tab-keywords").length && $("#tab-keywords").dynatree && $("#tab-keywords").dynatree("getTree") && $("#tab-keywords").dynatree("getTree").activateKey)
-					//	$("#tab-keywords").dynatree("getTree").activateKey(null);
+					return true;
+/*
+					if ($("#tree-keywords").length && $("#tree-keywords").dynatree && $("#tree-keywords").dynatree("getTree") && $("#tree-keywords").dynatree("getTree").activateKey)
+						$("#tree-keywords").dynatree("getTree").activateKey(null);
+
 					if(node.data.href && node.data.href != '#'){
-						//window.open(node.data.href, node.data.target);
-						if (history.pushState) Meeko.panner.assign(node.data.href);
-						else location.assign(node.data.href);
+						window.open(node.data.href, node.data.target);
 					}
+*/
 				}
 			});
 			// Expand all nodes if required
 			// Select the active help id
-			if (sHelpIdToActivate != '') $("#tab-toc").dynatree("getTree").activateKey(sHelpIdToActivate);
+			if (sHelpIdToActivate != '') $("#tree-toc").dynatree("getTree").activateKey(sHelpIdToActivate);
 		}
 		
 		// Keywords
 		
-		if ($("#tab-keywords").length) {
-			$("#tab-keywords").dynatree({
+		if ($("#tree-keywords").length) {
+			$("#tree-keywords").dynatree({
 				clickFolderMode: 1,
 				debugLevel: 0,
 				imagePath: 'css/dynatree/chm/',
@@ -127,13 +128,14 @@ a:hover {
 						eval('aRefList=' + node.data.click);
 						if (ShowKwPopup(node.li, aRefList))
 						{
-							//if ($("#tab-toc") && $("#tab-toc").dynatree && $("#tab-toc").dynatree("getTree") && $("#tab-toc").dynatree("getTree").activateKey)
-							//	$("#tab-toc").dynatree("getTree").activateKey(null);
+							return true;
+/*
+							if ($("#tree-toc") && $("#tree-toc").dynatree && $("#tree-toc").dynatree("getTree") && $("#tree-toc").dynatree("getTree").activateKey)
+								$("#tree-toc").dynatree("getTree").activateKey(null);
 							if(node.data.href && node.data.href != '#'){
-								//window.open(node.data.href, node.data.target);
-								if (history.pushState) Meeko.panner.assign(node.data.href);
-								else location.assign(node.data.href);
+								window.open(node.data.href, node.data.target);
 							}
+*/
 						}
 					}
 				}
@@ -155,8 +157,8 @@ a:hover {
 	
 	function SelectTocItem(sHelpId)
 	{
-		if ($("#tab-toc").length && $("#tab-toc").dynatree && $("#tab-toc").dynatree("getTree") && $("#tab-toc").dynatree("getTree").getNodeByKey) {
-			$("#tab-toc").dynatree("getTree").getNodeByKey(sHelpId).activateSilently();
+		if ($("#tree-toc").length && $("#tree-toc").dynatree && $("#tree-toc").dynatree("getTree") && $("#tree-toc").dynatree("getTree").getNodeByKey) {
+			$("#tree-toc").dynatree("getTree").getNodeByKey(sHelpId).activateSilently();
 		}
 		else {
 			sHelpIdToActivate = sHelpId;
@@ -230,7 +232,7 @@ a:hover {
 			{
 				if (oSearchEngine.aResults[nCnt][0] < aTl.length)
 				{
-					oUl.append("<li><a href='" + aTl[oSearchEngine.aResults[nCnt][0]][0] + "?search=" + escape(sValue) + "' target='FrameMain'>" + unescape(aTl[oSearchEngine.aResults[nCnt][0]][1]) + "</a></li>");
+					oUl.append("<li><a href='" + aTl[oSearchEngine.aResults[nCnt][0]][0] + "?search=" + escape(sValue) + "'>" + unescape(aTl[oSearchEngine.aResults[nCnt][0]][1]) + "</a></li>");
 				}
 			}
 			// Tree
@@ -239,17 +241,19 @@ a:hover {
 				debugLevel: 0,
 				imagePath: 'css/dynatree/chm/',
 				onActivate: function(node){
+return true;
+/*
 					if ($("#search_results_content") && $("#search_results_content").dynatree && $("#search_results_content").dynatree("getTree") && $("#search_results_content").dynatree("getTree").activateKey)
 						$("#search_results_content").dynatree("getTree").activateKey(null);
 					if(node.data.href && node.data.href != '#'){
 						window.open(node.data.href, node.data.target);
 					}
+*/
 				}
 			});
 		}
 	}
 </script>
--->
 
 </head>
 <body>
@@ -270,14 +274,48 @@ lookup: function(url, details) {
 
 	<hf-hlayout height="calc(100vh)">
 
-<hf-frame width="300px" overflow="auto" expr:src="a[rel=contents] {@href}" main="#topic_content">
+<hf-panel width="315px" overflow="auto" style="border-right: 1px solid #ccc;">
+	<hf-body>
+
+	<div id="tabs">
+		<ul>
+			<li><a mexpr:href="#tab-toc">Contents</a></li>
+			<li><a mexpr:href="#tab-keywords">Index</a></li>
+			<li><a mexpr:href="#tab-search">Search</a></li>
+		</ul>
+
+<hf-frame id="tab-toc" expr:src="a[rel=contents] {@href}" main="#topic_content">
+	<hf-body>
+		<hf-transform type="hazard" format="css">
+<div id="tree-toc" expr:_html="ul">
+</div>
+		</hf-transform>
+	</hf-body>
+</hf-frame>
+
+<hf-frame id="tab-keywords" expr:src="a[rel=index] {@href}" main="#topic_content">
+	<hf-body>
+		<hf-transform type="hazard" format="css">
+<div id="tree-keywords" expr:_html="ul">
+</div>
+		</hf-transform>
+	</hf-body>
+</hf-frame>
+
+<hf-frame id="tab-search" expr:src="a[rel=search] {@href}" main="#topic_content">
 	<hf-body>
 		<hf-transform type="main">
 		</hf-transform>
 	</hf-body>
 </hf-frame>
 
-<hf-frame width="calc(100vw - 300px)" overflow="auto" expr:src="a[rel=first] {@href}" targetname="hmcontent" main="body">
+	</div>
+
+
+	</hf-body>
+</hf-panel>
+
+<hf-frame width="calc(100vw - 315px)" overflow="auto" expr:src="a[rel=first] {@href}" targetname="hmcontent" main="body">
 	<hf-body>
 		<hf-transform type="main">
 		</hf-transform>
