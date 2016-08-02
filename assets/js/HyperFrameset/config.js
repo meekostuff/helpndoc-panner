@@ -1,6 +1,5 @@
 (function() {
 
-var logger = Meeko.logger;
 var _ = Meeko.stuff;
 var DOM = Meeko.DOM;
 var URL = Meeko.URL, baseURL = URL(document.URL);
@@ -48,7 +47,7 @@ function getFramesetLink(doc) {
 		var type = el.type.toLowerCase();
 		if (type == "text/html" || type == "") sp += 1;
 		else {
-			logger.warn("Invalid frameset document type: " + type);
+			console.warn("Invalid frameset document type: " + type);
 			return;
 		}
 		if (tmp = el.getAttribute("media")) { // FIXME polyfill for matchMedia??

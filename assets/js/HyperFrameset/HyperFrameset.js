@@ -1,41 +1,26 @@
+
+(function() {
+
+if (!this.Meeko) this.Meeko = {};
+if (!this.vendorPrefix) this.vendorPrefix = 'meeko';
+
+}).call(this);
+
 /*!
- Sprocket
- (c) Sean Hogan, 2008,2012,2013,2014
+ JS and Promise utils
+ (c) Sean Hogan, 2008,2012,2013,2014,2015
  Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
 */
 
-/* NOTE
-Requires some features not implemented on older browsers:
-element.matchesSelector (or prefixed equivalent) - IE9+
-element.querySelectorAll - IE8+
-element.addEventListener - IE9+
-element.dispatchEvent - IE9+
-Object.create - IE9+
-*/
-
-/* FIXME
-- event modifiers aren't filtering
-- everything in the sprockets code (apart from the Binding implementation) is a BIG BALL OF MUD
-*/
-
-if (!this.Meeko) this.Meeko = {};
-
-(function(window) {
-
-var document = window.document;
-
-var defaultOptions = {
-	'log_level': 'warn'
-}
-
-var vendorPrefix = 'meeko';
+(function() {
 
 /*
  ### Utility functions
  These might (or might not) be lodash equivalents
  */
 
-if (!Meeko.stuff) Meeko.stuff = (function() {
+var Meeko = this.Meeko;
+var stuff = Meeko.stuff = {};
 
 // TODO do string utils needs to sanity check args?
 var uc = function(str) { return str ? str.toUpperCase() : ''; }
@@ -86,15 +71,47 @@ var filter = function(a, fn, context) {
 	return output;
 }
 
-var find = function(a, fn, context) {
+function _find(a, fn, context, byIndex) {
 	for (var n=a.length, i=0; i<n; i++) {
 		var item = a[i];
 		var success = fn.call(context, item, i, a);
-		if (success) return item;
+		if (success) return byIndex ? i : item;
 	}
+	return byIndex ? -1 : undefined;
+}
+
+var findIndex = function(a, fn, context) {
+	return _find(a, fn, context, true);
+}
+
+var find = function(a, fn, context) {
+	return _find(a, fn, context, false);
+}
+
+var without = function(a1, a2) {
+	var result = [];
+	forEach(a1, function(item) {
+		if (includes(a2, item) || includes(result, item)) return;
+		result.push(item);
+	});
+	return result;
+}
+
+var difference = function(a1, a2) {
+	var result = [].concat(
+		without(a1, a2),
+		without(a2, a1)
+	);
+	return result;
 }
 
 var words = function(text) { return text.split(/\s+/); }
+
+var forIn = function(object, fn, context) {
+	for (var key in object) {
+		fn.call(context, object[key], key, object);
+	}
+}
 
 var forOwn = function(object, fn, context) {
 	var keys = Object.keys(object);
@@ -125,48 +142,22 @@ var assign = function(dest, src) {
 	return dest;
 }
 
-return {
+
+assign(stuff, {
 	uc: uc, lc: lc, ucFirst: ucFirst, camelCase: camelCase, kebabCase: kebabCase, words: words, // string
 	contains: includes, // FIXME deprecated
-	includes: includes, forEach: forEach, some: some, every: every, map: map, filter: filter, find: find, // array
-	forOwn: forOwn, isEmpty: isEmpty, defaults: defaults, assign: assign, extend: assign // object
-}
+	includes: includes, forEach: forEach, some: some, every: every, map: map, filter: filter, find: find, findIndex: findIndex, // array
+	without: without, difference: difference,
+	forIn: forIn, forOwn: forOwn, isEmpty: isEmpty, defaults: defaults, assign: assign, extend: assign // object
+});
 
-})();
 
+}).call(this);
+
+(function() {
+
+var window = this;
 var _ = window._ || Meeko.stuff; // WARN this could potentially use underscore.js / lodash.js but HAS NOT BEEN TESTED!!!
-
-/*
- ### Logger (minimal implementation - can be over-ridden)
- */
-if (!Meeko.logger) Meeko.logger = (function() {
-
-var logger = {};
-
-var levels = logger.levels = _.words('none error warn info debug');
-
-_.forEach(levels, function(name, num) {
-	
-levels[name] = num;
-logger[name] = window.console ?
-	console[name] ? 
-		console[name].apply ?
-			function() { if (num <= logger.LOG_LEVEL) console[name].apply(console, arguments); } :
-			function() { if (num <= logger.LOG_LEVEL) console[name](_.map(arguments).join(' ')); } // IE9
-
-		: function() { if (num <= logger.LOG_LEVEL) console.log(_.map(arguments).join(' ')); }
-	: function() {}; 
-
-}, this);
-
-logger.LOG_LEVEL = levels[defaultOptions['log_level']]; // DEFAULT
-
-return logger;
-
-})(); // end logger definition
-
-var logger = Meeko.logger;
-
 
 
 /*
@@ -358,9 +349,9 @@ function throwErrors() {
 function createThrowers(list) {
 	return _.map(list, function(error) {
 		return function() {
-			if (logger.LOG_LEVEL >= logger.levels.indexOf('debug')) {
-				if (error && error.stack) logger.debug(error.stack);
-				else logger.debug('Untraceable error: ' + error); // FIXME why are these occuring??
+			if (console.logLevel === 'debug') {
+				if (error && error.stack) console.debug(error.stack);
+				else console.debug('Untraceable error: ' + error); // FIXME why are these occuring??
 			}
 			throw error;
 		};
@@ -382,12 +373,21 @@ return {
 
 })(); // END Task
 
+
+}).call(this);
 /*
  ### Promise
  WARN: This was based on early DOM Futures specification. This has been evolved towards ES6 Promises.
  */
+
+(function() {
+
+var window = this;
+var _ = window._ || Meeko.stuff; // WARN this could potentially use underscore.js / lodash.js but HAS NOT BEEN TESTED!!!
+var Task = Meeko.Task;
+
 var Promise = Meeko.Promise = (function() {
-	
+
 var Promise = function(init) { // `init` is called as init(resolve, reject)
 	if (!(this instanceof Promise)) return new Promise(init);
 	
@@ -797,7 +797,7 @@ getTimeoutCount: function(remainingTime) {
 	if (predictor.currLimit < predictor.absLimit) return n;
 	predictor.currLimit = predictor.absLimit;
 	// FIXME do methods other than reduce() use TimeoutPredictor??
-	logger.debug('Promise.reduce() hit absLimit: ', predictor.absLimit);
+	console.debug('Promise.reduce() hit absLimit: ', predictor.absLimit);
 	return n;
 }
 
@@ -813,10 +813,227 @@ return Promise;
 })();
 
 
+}).call(this);
+
+
+
+
+(function() {
+
+var window = this;
+var document = window.document;
+
+var Meeko = window.Meeko;
+var _ = window._ || Meeko.stuff; // WARN this could potentially use underscore.js / lodash.js but HAS NOT BEEN TESTED!!!
+
+/*
+ ### URL utility functions
+ */
+var URL = Meeko.URL = (function() {
+
+// TODO Ideally Meeko.URL is read-only compatible with DOM4 URL
+// NOTE This could use `document.createElement('a').href = url` except DOM is too slow
+
+var URL = function(href, base) {
+	if (!(this instanceof URL)) return new URL(href, base);
+	var baseURL;
+	if (base) baseURL = typeof base === 'string' ? new URL(base) : base;
+	init.call(this, href, baseURL);
+}
+
+var init = function(href, baseURL) {
+	if (baseURL) {
+		href = baseURL.resolve(href);
+		_.assign(this, new URL(href));
+	}
+	else {
+		var url = parse(href);
+		for (var key in url) this[key] = url[key]; // _.assign(this, url);
+		enhance(this);
+	}
+}
+
+var keys = ['source','protocol','hostname','port','pathname','search','hash'];
+var parser = /^([^:\/?#]+:)?(?:\/\/([^:\/?#]*)(?::(\d*))?)?([^?#]*)?(\?[^#]*)?(#.*)?$/;
+
+var parse = ((typeof window.URL === 'function') && ('href' in window.URL.prototype)) ? 
+function(href) {
+	return new window.URL(href);
+} :
+function(href) {
+	href = href.trim();
+	var m = parser.exec(href);
+	var url = {};
+	for (var n=keys.length, i=0; i<n; i++) url[keys[i]] = m[i] || '';
+	return url;
+}
+
+function enhance(url) {
+	url.protocol = _.lc(url.protocol);
+	url.supportsResolve = /^(http|https|ftp|file):$/i.test(url.protocol);
+	if (!url.supportsResolve) return;
+	if (url.hostname) url.hostname = _.lc(url.hostname);
+	if (!url.host) {
+		url.host = url.hostname;
+		if (url.port) url.host += ':' + url.port;
+	}
+	if (!url.origin) url.origin = url.protocol + '//' + url.host;
+	if (!url.pathname) url.pathname = '/';
+	var pathParts = url.pathname.split('/'); // creates an array of at least 2 strings with the first string empty: ['', ...]
+	pathParts.shift(); // leaves an array of at least 1 string [...]
+	url.filename = pathParts.pop(); // filename could be ''
+	url.basepath = pathParts.length ? '/' + pathParts.join('/') + '/' : '/'; // either '/rel-path-prepended-by-slash/' or '/'
+	url.base = url.origin + url.basepath;
+	url.nosearch = url.origin + url.pathname;
+	url.nohash = url.nosearch + url.search;
+	url.href = url.nohash + url.hash;
+	url.toString = function() { return url.href; }
+};
+
+URL.prototype.resolve = function resolve(relHref) {
+	relHref = relHref.trim();
+	if (!this.supportsResolve) return relHref;
+	var substr1 = relHref.charAt(0), substr2 = relHref.substr(0,2);
+	var absHref =
+		/^[a-zA-Z0-9-]+:/.test(relHref) ? relHref :
+		substr2 == '//' ? this.protocol + relHref :
+		substr1 == '/' ? this.origin + relHref :
+		substr1 == '?' ? this.nosearch + relHref :
+		substr1 == '#' ? this.nohash + relHref :
+		substr1 != '.' ? this.base + relHref :
+		substr2 == './' ? this.base + relHref.replace('./', '') :
+		(function() {
+			var myRel = relHref;
+			var myDir = this.basepath;
+			while (myRel.substr(0,3) == '../') {
+				myRel = myRel.replace('../', '');
+				myDir = myDir.replace(/[^\/]+\/$/, '');
+			}
+			return this.origin + myDir + myRel;
+		}).call(this);
+	return absHref;
+}
+
+var urlAttributes = URL.attributes = (function() {
+	
+var AttributeDescriptor = function(tagName, attrName, loads, compound) {
+	var testEl = document.createElement(tagName);
+	var supported = attrName in testEl;
+	var lcAttr = _.lc(attrName); // NOTE for longDesc, etc
+	_.defaults(this, { // attrDesc
+		tagName: tagName,
+		attrName: attrName,
+		loads: loads,
+		compound: compound,
+		supported: supported
+	});
+}
+
+_.defaults(AttributeDescriptor.prototype, {
+
+resolve: function(el, baseURL) {
+	var attrName = this.attrName;
+	var url = el.getAttribute(attrName);
+	if (url == null) return;
+	var finalURL = this.resolveURL(url, baseURL)
+	if (finalURL !== url) el.setAttribute(attrName, finalURL);
+},
+
+resolveURL: function(url, baseURL) {
+	var relURL = url.trim();
+	var finalURL = relURL;
+	switch (relURL.charAt(0)) {
+		case '': // empty, but not null. TODO should this be a warning??
+			break;
+		
+		default:
+			finalURL = baseURL.resolve(relURL);
+			break;
+	}
+	return finalURL;
+}
+
+});
+
+var urlAttributes = {};
+_.forEach(_.words('link@<href script@<src img@<longDesc,<src,+srcset iframe@<longDesc,<src object@<data embed@<src video@<poster,<src audio@<src source@<src,+srcset input@formAction,<src button@formAction,<src a@+ping,href area@href q@cite blockquote@cite ins@cite del@cite form@action'), function(text) {
+	var m = text.split('@'), tagName = m[0], attrs = m[1];
+	var attrList = urlAttributes[tagName] = {};
+	_.forEach(attrs.split(','), function(attrName) {
+		var downloads = false;
+		var compound = false;
+		var modifier = attrName.charAt(0);
+		switch (modifier) {
+		case '<':
+			downloads = true;
+			attrName = attrName.substr(1);
+			break;
+		case '+':
+			compound = true;
+			attrName = attrName.substr(1);
+			break;
+		}
+		attrList[attrName] = new AttributeDescriptor(tagName, attrName, downloads, compound);
+	});
+});
+
+function resolveSrcset(urlSet, baseURL) {
+	var urlList = urlSet.split(/\s*,\s*/); // FIXME this assumes URLs don't contain ','
+	_.forEach(urlList, function(urlDesc, i) {
+		urlList[i] = urlDesc.replace(/^\s*(\S+)(?=\s|$)/, function(all, url) { return baseURL.resolve(url); });
+	});
+	return urlList.join(', ');
+}
+
+urlAttributes['img']['srcset'].resolveURL = resolveSrcset;
+urlAttributes['source']['srcset'].resolveURL = resolveSrcset;
+
+urlAttributes['a']['ping'].resolveURL = function(urlSet, baseURL) {
+	var urlList = urlSet.split(/\s+/);
+	_.forEach(urlList, function(url, i) {
+		urlList[i] = baseURL.resolve(url);
+	});
+	return urlList.join(' ');
+}
+
+return urlAttributes;
+
+})();
+
+
+return URL;
+
+})();
+
+
+}).call(this);
+/*!
+ DOM utils
+ (c) Sean Hogan, 2008,2012,2013,2014
+ Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
+*/
+
+/* NOTE
+Requires some features not implemented on older browsers:
+element.matchesSelector (or prefixed equivalent) - IE9+
+element.querySelectorAll - IE8+
+element.addEventListener - IE9+
+element.dispatchEvent - IE9+
+Object.create - IE9+
+*/
+
+(function() {
+
+var window = this;
+var document = window.document;
+
+var Meeko = window.Meeko;
+var _ = window._ || Meeko.stuff; // WARN this could potentially use underscore.js / lodash.js but HAS NOT BEEN TESTED!!!
+var Promise = Meeko.Promise;
+
 /*
  ### DOM utility functions
  */
-
 var DOM = Meeko.DOM = (function() {
 
 // TODO all this node manager stuff assumes that nodes are only released on unload
@@ -824,7 +1041,8 @@ var DOM = Meeko.DOM = (function() {
 
 // TODO A node-manager API would be useful elsewhere
 
-var nodeIdProperty = vendorPrefix + 'ID';
+var nodeIdSuffix = Math.round(Math.random() * 1000000);
+var nodeIdProperty = '__' + vendorPrefix + nodeIdSuffix;
 var nodeCount = 0; // used to generated node IDs
 var nodeTable = []; // list of tagged nodes
 var nodeStorage = {}; // hash of storage for nodes, keyed off `nodeIdProperty`
@@ -832,7 +1050,7 @@ var nodeStorage = {}; // hash of storage for nodes, keyed off `nodeIdProperty`
 var uniqueId = function(node) {
 	var nodeId = node[nodeIdProperty];
 	if (nodeId) return nodeId;
-	nodeId = '__' + vendorPrefix + '_' + nodeCount++;
+	nodeId = '__' + nodeCount++;
 	node[nodeIdProperty] = nodeId; // WARN would need `new String(nodeId)` in IE<=8
 			// so that node cloning doesn't copy the node ID property
 	nodeTable.push(node);
@@ -870,8 +1088,17 @@ var getTagName = function(el) {
 	return el && el.nodeType === 1 ? _.lc(el.tagName) : '';
 }
 
+
+var getTagName = function(el) {
+	return el && el.nodeType === 1 ? _.lc(el.tagName) : '';
+}
+
 var matchesSelector;
-_.some(_.words('moz webkit ms o'), function(prefix) {
+
+if (document.documentElement.matches) matchesSelector = function(element, selector) {
+	return (element && element.nodeType === 1) ? element.matches(selector) : false; 
+}
+else _.some(_.words('moz webkit ms o'), function(prefix) {
 	var method = prefix + 'MatchesSelector';
 	if (document.documentElement[method]) {
 		matchesSelector = function(element, selector) { return (element && element.nodeType === 1) ? element[method](selector) : false; }
@@ -883,36 +1110,66 @@ _.some(_.words('moz webkit ms o'), function(prefix) {
 
 var matches = matchesSelector ?
 function(element, selector, scope) {
-	if (scope) selector = absolutizeSelector(selector, scope);
-	return matchesSelector(element, selector);
+return scopeify(function(absSelector) {
+
+	return matchesSelector(element, absSelector);
+
+}, selector, scope);
 } :
 function() { throw Error('matches not supported'); } // NOTE fallback
 
 var closest = matchesSelector ?
 function(element, selector, scope) {
-	if (scope) selector = absolutizeSelector(selector, scope);
+return scopeify(function(absSelector) {
+
 	for (var el=element; el && el.nodeType === 1 && el!==scope; el=el.parentNode) {
-		if (matchesSelector(el, selector)) return el;
+		if (matchesSelector(el, absSelector)) return el;
 	}
-	return;
+
+}, selector, scope);
 } :
 function() { throw Error('closest not supported'); } // NOTE fallback
 
-function absolutizeSelector(selector, scope) { // WARN does not handle relative selectors that start with sibling selectors
+function scopeify(fn, selector, scope) {
+	var absSelector = selector;
+	if (scope) {
+		var uid = uniqueId(scope);
+		scope.setAttribute(nodeIdProperty, uid);
+		absSelector = absolutizeSelector(selector, scope);
+	}
+
+	var result = fn(absSelector);
+
+	if (scope) {
+		scope.removeAttribute(nodeIdProperty);
+	}
+
+	return result;
+}
+
+function absolutizeSelector(selectorGroup, scope) { // WARN does not handle relative selectors that start with sibling selectors
 	switch (scope.nodeType) {
 	case 1:
 		break;
 	case 9: case 11:
 		// TODO what to do with document / fragment
-		return selector;
+		return selectorGroup;
 	default:
 		// TODO should other node types throw??
-		return selector;
+		return selectorGroup;
 	}
-	var id = scope.id;
-	if (!id) id = scope.id = uniqueId(scope);
-	var scopePrefix = '#' + id + ' ';
-	return scopePrefix + selector.replace(/,(?![^(]*\))/g, ', ' + scopePrefix); // COMMA (,) that is not inside BRACKETS. Technically: not followed by a RHB ')' unless first followed by LHB '(' 
+	
+	var nodeId = uniqueId(scope);
+	var scopeSelector = '[' + nodeIdProperty + '=' + nodeId + ']';
+
+	// split on COMMA (,) that is not inside BRACKETS. Technically: not followed by a RHB ')' or ']' unless first followed by LHB '(' or '[' 
+	var selectors = selectorGroup.split(/,(?![^\(]*\)|[^\[]*\])/);
+	selectors = _.map(selectors, function(s) {
+		if (/^:scope\b/.test(s)) return s.replace(/^:scope\b/, scopeSelector);
+		else return scopeSelector + ' ' + s;
+	});
+		
+	return selectors.join(', ');
 }
 
 var findId = function(id, doc) {
@@ -924,26 +1181,27 @@ var findId = function(id, doc) {
 }
 
 var findAll = document.querySelectorAll ?
-function(selector, node, scope) {
+function(selector, node, scope, inclusive) {
 	if (!node) node = document;
 	if (!node.querySelectorAll) return [];
-	if (scope) {
-		if (!scope.nodeType) scope = node; // `true` but not the scope element
-		selector = absolutizeSelector(selector, scope);
-	}
-	return _.map(node.querySelectorAll(selector));
+	if (scope && !scope.nodeType) scope = node; // `true` but not the scope element
+	return scopeify(function(absSelector) {
+		var result = _.map(node.querySelectorAll(absSelector));
+		if (inclusive && matchesSelector(node, absSelector)) result.unshift(node);
+		return result;
+	}, selector, scope);
 } :
 function() { throw Error('findAll() not supported'); };
 
 var find = document.querySelector ?
-function(selector, node, scope) {
+function(selector, node, scope, inclusive) {
 	if (!node) node = document;
 	if (!node.querySelector) return null;
-	if (scope) {
-		if (!scope.nodeType) scope = node; // `true` but not the scope element
-		selector = absolutizeSelector(selector, scope);
-	}
-	return node.querySelector(selector);
+	if (scope && !scope.nodeType) scope = node; // `true` but not the scope element
+	return scopeify(function(absSelector) {
+		if (inclusive && matchesSelector(node, absSelector)) return node;
+		return node.querySelector(absSelector);
+	}, selector, scope);
 } :
 function() { throw Error('find() not supported'); };
 
@@ -993,8 +1251,8 @@ function dispatchEvent(target, type, params) { // NOTE every JS initiated event 
 		params = type;
 		type = params.type;
 	}
-	var bubbles = 'bubbles' in params ? !!params.bubbles : true;
-	var cancelable = 'cancelable' in params ? !!params.cancelable : true;
+	var bubbles = params && 'bubbles' in params ? !!params.bubbles : true;
+	var cancelable = params && 'cancelable' in params ? !!params.cancelable : true;
 	if (typeof type !== 'string') throw Error('trigger() called with invalid event type');
 	var detail = params && params.detail;
 	var event = document.createEvent('CustomEvent');
@@ -1003,6 +1261,17 @@ function dispatchEvent(target, type, params) { // NOTE every JS initiated event 
 	return target.dispatchEvent(event);
 }
 
+var managedEvents = [];
+
+function manageEvent(type) {
+	if (_.includes(managedEvents, type)) return;
+	managedEvents.push(type);
+	window.addEventListener(type, function(event) {
+		// NOTE stopPropagation() prevents custom default-handlers from running. DOMSprockets nullifies it.
+		event.stopPropagation = function() { console.warn('event.stopPropagation() is a no-op'); }
+		event.stopImmediatePropagation = function() { console.warn('event.stopImmediatePropagation() is a no-op'); }
+	}, true);
+}
 
 var SUPPORTS_ATTRMODIFIED = (function() {
 	var supported = false;
@@ -1058,7 +1327,7 @@ else if (SUPPORTS_ATTRMODIFIED) {
 	}, true);
 	
 }
-else logger.warn('element.visibilitychange event will not be supported');
+else console.warn('element.visibilitychange event will not be supported');
 
 // FIXME this should use observers, not events
 function triggerVisibilityChangeEvent(target) {
@@ -1088,32 +1357,250 @@ function whenVisible(element) { // FIXME this quite possibly causes leaks if clo
 	});
 }
 
+
 var insertNode = function(conf, refNode, node) { // like imsertAdjacentHTML but with a node and auto-adoption
 	var doc = refNode.ownerDocument;
 	if (doc.adoptNode) node = doc.adoptNode(node); // Safari 5 was throwing because imported nodes had been added to a document node
 	switch(conf) {
+
+	case 'before':
 	case 'beforebegin': refNode.parentNode.insertBefore(node, refNode); break;
+
+	case 'after':
 	case 'afterend': refNode.parentNode.insertBefore(node, refNode.nextSibling); break;
+
+	case 'start':
 	case 'afterbegin': refNode.insertBefore(node, refNode.firstChild); break;
+
+	case 'end':
 	case 'beforeend': refNode.appendChild(node); break;
-	case 'replace': refNode.parentNode.replaceChild(node, refNode);
+
+	case 'replace': refNode.parentNode.replaceChild(node, refNode); break;
+
+	case 'empty':
+	case 'contents': 
+		// TODO DOM.empty(refNode);
+		var child;
+		while (child = refNode.firstChild) refNode.removeChild(child);
+		refNode.appendChild(node);
+		break;
 	}
 	return refNode;
 }
 
+var adoptContents = function(parentNode, doc) {
+	if (!doc) doc = document;
+	var frag = doc.createDocumentFragment();
+	var node;
+	while (node = parentNode.firstChild) frag.appendChild(doc.adoptNode(node));
+	return frag;
+}
+	
+/* 
+NOTE:  for more details on how checkStyleSheets() works cross-browser see 
+http://aaronheckmann.blogspot.com/2010/01/writing-jquery-plugin-manager-part-1.html
+TODO: does this still work when there are errors loading stylesheets??
+*/
+// TODO would be nice if this didn't need to be polled
+// TODO should be able to use <link>.onload, see
+// http://stackoverflow.com/a/13610128/108354
+// https://developer.mozilla.org/en-US/docs/Web/HTML/Element/link
+var checkStyleSheets = function() { 
+	// check that every <link rel="stylesheet" type="text/css" /> 
+	// has loaded
+	return _.every(DOM.findAll('link'), function(node) {
+		if (!node.rel || !/^stylesheet$/i.test(node.rel)) return true;
+		if (node.type && !/^text\/css$/i.test(node.type)) return true;
+		if (node.disabled) return true;
+		
+		// handle IE
+		if (node.readyState) return readyStateLookup[node.readyState];
+
+		var sheet = node.sheet;
+
+		// handle webkit
+		if (!sheet) return false;
+
+		try {
+			// Firefox should throw if not loaded or cross-domain
+			var rules = sheet.rules || sheet.cssRules;
+			return true;
+		} 
+		catch (error) {
+			// handle Firefox cross-domain
+			switch(error.name) {
+			case 'NS_ERROR_DOM_SECURITY_ERR': case 'SecurityError':
+				return true;
+			case 'NS_ERROR_DOM_INVALID_ACCESS_ERR': case 'InvalidAccessError':
+				return false;
+			default:
+				return true;
+			}
+		} 
+	});
+}
+
+// WARN IE <= 8 would need styleText() to get/set <style> contents
+// WARN old non-IE would need scriptText() to get/set <script> contents
+
+var copyAttributes = function(node, srcNode) {
+	_.forEach(_.map(srcNode.attributes), function(attr) {
+		node.setAttribute(attr.name, attr.value); // WARN needs to be more complex for IE <= 7
+	});
+	return node;
+}
+
+var removeAttributes = function(node) {
+	_.forEach(_.map(node.attributes), function(attr) {
+		node.removeAttribute(attr.name);
+	});
+	return node;
+}
+
+var CREATE_DOCUMENT_COPIES_URL = (function() {
+	var doc = document.implementation.createHTMLDocument('');
+	return doc.URL === document.URL;
+})();
+
+var CLONE_DOCUMENT_COPIES_URL = (function() {
+	try {
+		var doc = document.cloneNode(false);
+		if (doc.URL === document.URL) return true;
+	}
+	catch (err) { }
+	return false;
+})();
+		
+// NOTE we want create*Document() to have a URL
+var CREATE_DOCUMENT_WITH_CLONE = !CREATE_DOCUMENT_COPIES_URL && CLONE_DOCUMENT_COPIES_URL;
+
+var createDocument = function(srcDoc) { // modern browsers. IE >= 9
+	if (!srcDoc) srcDoc = document;
+	// TODO find doctype element??
+	var doc;
+	if (CREATE_DOCUMENT_WITH_CLONE) { 
+		doc = srcDoc.cloneNode(false);
+	}
+	else {
+		doc = srcDoc.implementation.createHTMLDocument('');
+		doc.removeChild(doc.documentElement);
+	}
+	return doc;
+}
+
+var createHTMLDocument = function(title, srcDoc) { // modern browsers. IE >= 9
+	if (!srcDoc) srcDoc = document;
+	// TODO find doctype element??
+	var doc;
+	if (CREATE_DOCUMENT_WITH_CLONE) { 
+		doc = srcDoc.cloneNode(false);
+		docEl = doc.createElement('html');
+		docEl.innerHTML = '<head><title>' + title + '</title></head><body></body>';
+		doc.appendChild(docEl);
+	}
+	else {
+		doc = srcDoc.implementation.createHTMLDocument('');
+	}
+	return doc;
+}
+
+var cloneDocument = function(srcDoc) {
+	var doc = DOM.createDocument(srcDoc);
+	var docEl = doc.importNode(srcDoc.documentElement, true);
+	doc.appendChild(docEl); // NOTE already adopted
+
+	// WARN sometimes IE9/IE10/IE11 doesn't read the content of inserted <style>
+	// NOTE this doesn't seem to matter on IE10+. The following is precautionary
+	_.forEach(DOM.findAll('style', doc), function(node) {
+		var sheet = node.sheet;
+		if (!sheet || sheet.cssText == null) return;
+		if (sheet.cssText != '') return;
+		node.textContent = node.textContent;
+	});
+	
+	return doc;
+}
+
+var scrollToId = function(id) { // FIXME this isn't being used
+	if (id) {
+		var el = DOM.findId(id);
+		if (el) el.scrollIntoView(true);
+	}
+	else window.scroll(0, 0);
+}
+
+var readyStateLookup = { // used in domReady() and checkStyleSheets()
+	'uninitialized': false,
+	'loading': false,
+	'interactive': false,
+	'loaded': true,
+	'complete': true
+}
+
+var domReady = (function() { // WARN this assumes that document.readyState is valid or that content is ready...
+
+var readyState = document.readyState;
+var loaded = readyState ? readyStateLookup[readyState] : true;
+var queue = [];
+
+function domReady(fn) {
+	if (typeof fn !== 'function') return;
+	queue.push(fn);
+	if (loaded) processQueue();
+}
+
+function processQueue() {
+	_.forEach(queue, function(fn) { setTimeout(fn); });
+	queue.length = 0;
+}
+
+var events = {
+	'DOMContentLoaded': document,
+	'load': window
+};
+
+if (!loaded) _.forOwn(events, function(node, type) { node.addEventListener(type, onLoaded, false); });
+
+return domReady;
+
+// NOTE the following functions are hoisted
+function onLoaded(e) {
+	loaded = true;
+	_.forOwn(events, function(node, type) { node.removeEventListener(type, onLoaded, false); });
+	processQueue();
+}
+
+})();
 
 return {
+	uniqueIdAttr: nodeIdProperty,
 	uniqueId: uniqueId, setData: setData, getData: getData, hasData: hasData, // FIXME releaseNodes
 	getTagName: getTagName,
 	contains: contains, matches: matches,
 	findId: findId, find: find, findAll: findAll, closest: closest, siblings: siblings,
+	dispatchEvent: dispatchEvent, manageEvent: manageEvent,
+	adoptContents: adoptContents,
 	SUPPORTS_ATTRMODIFIED: SUPPORTS_ATTRMODIFIED, 
-	dispatchEvent: dispatchEvent,
 	isVisible: isVisible, whenVisible: whenVisible,
-	insertNode: insertNode
+	insertNode: insertNode, 
+	checkStyleSheets: checkStyleSheets,
+	copyAttributes: copyAttributes, removeAttributes: removeAttributes, // attrs
+	ready: domReady, // events
+	createDocument: createDocument, createHTMLDocument: createHTMLDocument, cloneDocument: cloneDocument, // documents
+	scrollToId: scrollToId
 }
 
 })();
+
+
+}).call(this);
+
+(function() {
+
+var window = this;
+var document = window.document;
+var _ = window._ || Meeko.stuff; // WARN this could potentially use underscore.js / lodash.js but HAS NOT BEEN TESTED!!!
+var Task = Meeko.Task;
 
 Meeko.controllers = (function() { // TODO should this be under Meeko.sprockets??
 
@@ -1161,7 +1648,39 @@ listen: function(name, listener) {
 })();
 
 
-this.Meeko.sprockets = (function() {
+}).call(this);
+/*!
+ Sprocket
+ (c) Sean Hogan, 2008,2012,2013,2014,2016
+ Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
+*/
+
+/* NOTE
+Requires some features not implemented on older browsers:
+element.matchesSelector (or prefixed equivalent) - IE9+
+element.querySelectorAll - IE8+
+element.addEventListener - IE9+
+element.dispatchEvent - IE9+
+Object.create - IE9+
+*/
+
+/* FIXME
+- event modifiers aren't filtering
+- everything in the sprockets code (apart from the Binding implementation) is a BIG BALL OF MUD
+*/
+
+(function() {
+
+var document = window.document;
+
+var Meeko = this.Meeko;
+var _ = window._ || Meeko.stuff; // WARN this could potentially use underscore.js / lodash.js but HAS NOT BEEN TESTED!!!
+var Task = Meeko.Task;
+var Promise = Meeko.Promise;
+var DOM = Meeko.DOM;
+
+
+var sprockets = Meeko.sprockets = (function() {
 /* FIXME
 	- auto DOM monitoring for node insertion / removal should be a start() option
 	- manual control must allow attached, enteredView, leftView lifecycle management
@@ -1177,7 +1696,7 @@ function attachBinding(definition, element) {
 	if (DOM.hasData(element)) {
 		binding = DOM.getData(element);
 		if (binding.definition !== rule.definition) throw Error('Mismatch between definition and binding already present');
-		logger.warn('Binding definition applied when binding already present');
+		console.warn('Binding definition applied when binding already present');
 		return binding;
 	}
 	binding = new Binding(definition);
@@ -1238,8 +1757,8 @@ manageEvent: function(type) {
 	this.managedEvents.push(type);
 	window.addEventListener(type, function(event) {
 		// NOTE stopPropagation() prevents custom default-handlers from running. DOMSprockets nullifies it.
-		event.stopPropagation = function() { logger.debug('event.stopPropagation() is a no-op'); }
-		event.stopImmediatePropagation = function() { logger.debug('event.stopImmediatePropagation() is a no-op'); }
+		event.stopPropagation = function() { console.debug('event.stopPropagation() is a no-op'); }
+		event.stopImmediatePropagation = function() { console.debug('event.stopImmediatePropagation() is a no-op'); }
 	}, true);
 }
 
@@ -1315,7 +1834,7 @@ addHandler: function(handler) {
 	var type = handler.type;
 	var capture = (handler.eventPhase == 1); // Event.CAPTURING_PHASE
 	if (capture) {
-		logger.warn('Capture phase for events not supported');
+		console.warn('Capture phase for events not supported');
 		return; // FIXME should this convert to bubbling instead??
 	}
 
@@ -1396,14 +1915,14 @@ function handleEvent(event, handler) {
 var convertXBLHandler = function(config) {
 	var handler = {}
 	handler.type = config.event;
-	if (null == config.event) logger.warn('Invalid handler: event property undeclared');
+	if (null == config.event) console.warn('Invalid handler: event property undeclared');
 
 	function lookupValue(attrName, lookup) {
 		var attrValue = config[attrName];
 		var result;
 		if (attrValue) {
 			result = lookup[attrValue];
-			if (null == result) logger.info('Ignoring invalid property ' + attrName + ': ' + attrValue);
+			if (null == result) console.info('Ignoring invalid property ' + attrName + ': ' + attrValue);
 		}
 		return result;
 	}
@@ -1683,7 +2202,7 @@ _.assign(sprockets, {
 
 registerElement: function(tagName, defn) { // FIXME test tagName
 	if (started) throw Error('sprockets management already started');
-	if (defn.rules) logger.warn('registerElement() does not support rules. Try registerComposite()');
+	if (defn.rules) console.warn('registerElement() does not support rules. Try registerComposite()');
 	var bindingDefn = new BindingDefinition(defn);
 	var selector = tagName + ', [is=' + tagName + ']'; // TODO why should @is be supported??
 	var rule = new BindingRule(selector, bindingDefn);
@@ -1879,7 +2398,7 @@ registerComposite: function(tagName, definition) {
 	var defn = _.assign({}, definition);
 	var rules = defn.rules;
 	delete defn.rules;
-	if (!rules) logger.warn('registerComposite() called without any sprocket rules. Try registerElement()');
+	if (!rules) console.warn('registerComposite() called without any sprocket rules. Try registerElement()');
 	var onattached = defn.attached;
 	defn.attached = function() {
 		var object = this;
@@ -2354,267 +2873,325 @@ ariaMatches: function(role) {
 })();
 
 
-})(window);
+}).call(this);
 /*!
- * HyperFrameset
- * Copyright 2009-2014 Sean Hogan (http://meekostuff.net/)
+ * scriptQueue
+ * Copyright 2009-2016 Sean Hogan (http://meekostuff.net/)
  * Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
  */
 
-/* NOTE
-	+ assumes DOMSprockets
-*/
-/* TODO
-    + substantial error handling and notification needs to be added
-    + <link rel="self" />
-    + Would be nice if more of the internal functions were called as method, eg DOM.ready()...
-        this would allow the boot-script to modify them as appropriate
-    + Up-front feature testing to prevent boot on unsupportable platorms...
-        e.g. can't create HTML documents
-    + use requestAnimationFrame() when available
-    + The passing of nodes between documents needs to be audited.
-		Safari and IE10,11 in particular seem to require nodes to be imported / adopted
-		(not fully understood right now)
- */
-
-(function() {
+(function(classnamespace) {
 
 var window = this;
 var document = window.document;
 
+var Meeko = this.Meeko;
+var _ = Meeko.stuff;
+var Promise = Meeko.Promise;
+var DOM = Meeko.DOM;
 
-if (!window.XMLHttpRequest) throw Error('HyperFrameset requires native XMLHttpRequest');
-if (!window.Meeko || !window.Meeko.sprockets) throw Error('HyperFrameset requires DOMSprockets');
-
-var vendorPrefix = 'meeko';
-
-var _ = Meeko.stuff; // provided by DOMSprockets
-
-// TODO these additions to Meeko.stuff should go in DOMSprockets
-
-var without = function(a1, a2) {
-	var result = [];
-	_.forEach(a1, function(item) {
-		if (_.includes(a2, item) || _.includes(result, item)) return;
-		result.push(item);
-	});
-	return result;
-}
-
-var difference = function(a1, a2) {
-	var result = [].concat(
-		_.without(a1, a2),
-		_.without(a2, a1)
-	);
-	return result;
-}
-
-_.defaults(_, {
-	without: without, difference: difference
-});
+/*
+ WARN: This description comment was from the former scriptQueue implementation.
+ It is still a correct description of behavior,
+ but doesn't give a great insight into the current Promises-based implementation.
+ 
+ We want <script>s to execute in document order (unless @async present)
+ but also want <script src>s to download in parallel.
+ The script queue inserts scripts until it is paused on a blocking script.
+ The onload (or equivalent) or onerror handlers of the blocking script restart the queue.
+ Inline <script> and <script src="..." async> are never blocking.
+ Sync <script src> are blocking, but if `script.async=false` is supported by the browser
+ then only the last <script src> (in a series of sync scripts) needs to pause the queue. See
+	http://wiki.whatwg.org/wiki/Dynamic_Script_Execution_Order#My_Solution
+ Script preloading is always initiated, even if the browser doesn't support it. See
+	http://wiki.whatwg.org/wiki/Dynamic_Script_Execution_Order#readyState_.22preloading.22
 	
+ FIXME scriptQueue.push should also accept functions
+*/
+var queue = [],
+	emptying = false;
 
-var logger = Meeko.logger; // provided by DOMSprockets or even boot-script
+var testScript = document.createElement('script'),
+	supportsSync = (testScript.async === true);
 
-var Task = Meeko.Task;
+var scriptQueue = {
+
+push: function(node) {
+return new Promise(function(resolve, reject) {
+	if (emptying) throw Error('Attempt to append script to scriptQueue while emptying');
+	
+	// TODO assert node is in document
+
+	// TODO this filtering may need reworking now we don't support older browsers
+	if (!node.type || /^text\/javascript$/i.test(node.type)) {
+		console.info('Attempt to queue already executed script ' + node.src);
+		resolve(); // TODO should this be reject() ??
+		return;
+	}
+
+	if (!/^text\/javascript\?disabled$/i.test(node.type)) {
+		console.info('Unsupported script-type ' + node.type);
+		resolve(); // TODO should this be reject() ??
+		return;
+	}
+
+	var script = document.createElement('script');
+
+	if (node.src) addListeners(); // WARN must use `node.src` because attrs not copied to `script` yet
+	
+	DOM.copyAttributes(script, node); 
+	script.text = node.text;
+
+	if (script.getAttribute('defer')) { // @defer is not appropriate. Implement as @async
+		script.removeAttribute('defer');
+		script.setAttribute('async', '');
+		console.warn('@defer not supported on scripts');
+	}
+	if (supportsSync && script.src && !script.hasAttribute('async')) script.async = false;
+	script.type = 'text/javascript';
+	
+	// enabledFu resolves after script is inserted
+	var enabledFu = Promise.applyTo(); 
+	
+	var prev = queue[queue.length - 1], prevScript = prev && prev.script;
+
+	var triggerFu; // triggerFu allows this script to be enabled, i.e. inserted
+	if (prev) {
+		if (prevScript.hasAttribute('async') || script.src && supportsSync && !script.hasAttribute('async')) triggerFu = prev.enabled;
+		else triggerFu = prev.complete; 
+	}
+	else triggerFu = Promise.resolve();
+	
+	triggerFu.then(enable, enable);
+
+	var completeFu = Promise.applyTo();
+	completeFu.then(resolve, reject);
+
+	var current = { script: script, complete: completeFu, enabled: enabledFu };
+	queue.push(current);
+	return;
+
+	// The following are hoisted
+	function enable() {
+		DOM.insertNode('replace', node, script);
+		enabledFu.resolve(); 
+		if (!script.src) {
+			spliceItem(queue, current);
+			completeFu.resolve();
+		}
+	}
+	
+	function onLoad(e) {
+		removeListeners();
+		spliceItem(queue, current);
+		completeFu.resolve();
+	}
+
+	function onError(e) {
+		removeListeners();
+		spliceItem(queue, current);
+		completeFu.reject(function() { throw Error('Script loading failed'); }); // FIXME throw NetworkError()
+	}
+
+	function addListeners() {
+		script.addEventListener('load', onLoad, false);
+		script.addEventListener('error', onError, false);
+	}
+	
+	function removeListeners() {
+		script.removeEventListener('load', onLoad, false);
+		script.removeEventListener('error', onError, false);
+	}
+	
+	function spliceItem(a, item) {
+		for (var n=a.length, i=0; i<n; i++) {
+			if (a[i] !== item) continue;
+			a.splice(i, 1);
+			return;
+		}
+	}
+
+});
+},
+
+empty: function() {
+return new Promise(function(resolve, reject) {
+	
+	emptying = true;
+	if (queue.length <= 0) {
+		emptying = false;
+		resolve();
+		return;
+	}
+	_.forEach(queue, function(value, i) {
+		var acceptCallback = function() {
+			if (queue.length <= 0) {
+				emptying = false;
+				resolve();
+			}
+		}
+		value.complete.then(acceptCallback, acceptCallback);
+	});
+
+});
+}
+
+} // end scriptQueue
+
+classnamespace.scriptQueue = scriptQueue;
+
+}).call(this, this.Meeko);
+
+
+(function() {
+
+var window = this;
+var Meeko = window.Meeko;
+var _ = Meeko.stuff;
+var URL = Meeko.URL;
+var DOM = Meeko.DOM;
 var Promise = Meeko.Promise;
 
 /*
- ### DOM utility functions
- */
+	HTML_IN_DOMPARSER indicates if DOMParser supports 'text/html' parsing. Historically only Firefox did.
+	Cross-browser support coming? https://developer.mozilla.org/en-US/docs/Web/API/DOMParser#Browser_compatibility
+*/
+var HTML_IN_DOMPARSER = (function() {
 
-var DOM = Meeko.DOM;
-
-// WARN IE <= 8 would need styleText() to get/set <style> contents
-// WARN old non-IE would need scriptText() to get/set <script> contents
-
-var copyAttributes = function(node, srcNode) {
-	_.forEach(_.map(srcNode.attributes), function(attr) {
-		node.setAttribute(attr.name, attr.value); // WARN needs to be more complex for IE <= 7
-	});
-	return node;
-}
-
-var removeAttributes = function(node) {
-	_.forEach(_.map(node.attributes), function(attr) {
-		node.removeAttribute(attr.name);
-	});
-	return node;
-}
-
-var CREATE_DOCUMENT_COPIES_URL = (function() {
-	var doc = document.implementation.createHTMLDocument('');
-	return doc.URL === document.URL;
-})();
-
-var CLONE_DOCUMENT_COPIES_URL = (function() {
 	try {
-		var doc = document.cloneNode(false);
-		if (doc.URL === document.URL) return true;
+		var doc = (new DOMParser).parseFromString('', 'text/html');
+		return !!doc;
 	}
-	catch (err) { }
-	return false;
+	catch(err) { return false; }
+
 })();
-		
-// NOTE we want create*Document() to have a URL
-var CREATE_DOCUMENT_WITH_CLONE = !CREATE_DOCUMENT_COPIES_URL && CLONE_DOCUMENT_COPIES_URL;
 
-var createDocument = function(srcDoc) { // modern browsers. IE >= 9
-	if (!srcDoc) srcDoc = document;
-	// TODO find doctype element??
-	var doc;
-	if (CREATE_DOCUMENT_WITH_CLONE) { 
-		doc = srcDoc.cloneNode(false);
-	}
-	else {
-		doc = srcDoc.implementation.createHTMLDocument('');
-		doc.removeChild(doc.documentElement);
-	}
-	return doc;
-}
 
-var createHTMLDocument = function(title, srcDoc) { // modern browsers. IE >= 9
-	if (!srcDoc) srcDoc = document;
-	// TODO find doctype element??
-	var doc;
-	if (CREATE_DOCUMENT_WITH_CLONE) { 
-		doc = srcDoc.cloneNode(false);
-		docEl = doc.createElement('html');
-		docEl.innerHTML = '<head><title>' + title + '</title></head><body></body>';
-		doc.appendChild(docEl);
-	}
-	else {
-		doc = srcDoc.implementation.createHTMLDocument('');
-	}
-	return doc;
-}
+/*
+	normalize() is called between html-parsing (internal) and document normalising (external function).
+	It is called after using the native parser:
+	- with DOMParser#parseFromString(), see htmlParser#nativeParser()
+	- with XMLHttpRequest & xhr.responseType='document', see httpProxy's request()
+	The innerHTMLParser also uses this call
+*/
+function normalize(doc, details) { 
 
-var cloneDocument = function(srcDoc) {
-	var doc = DOM.createDocument(srcDoc);
-	var docEl = doc.importNode(srcDoc.documentElement, true);
-	doc.appendChild(docEl); // NOTE already adopted
+	var baseURL = URL(details.url);
 
-	// WARN sometimes IE9/IE10/IE11 doesn't read the content of inserted <style>
-	// NOTE this doesn't seem to matter on IE10+. The following is precautionary
-	_.forEach(DOM.findAll('style', doc), function(node) {
-		var sheet = node.styleSheet || node.sheet;
-		if (!sheet || sheet.cssText == null) return;
-		if (sheet.cssText != '') return;
-		node.textContent = node.textContent;
+	_.forEach(DOM.findAll('style', doc.body), function(node) {
+		if (node.hasAttribute('scoped')) return; // ignore
+		doc.head.appendChild(node); // NOTE no adoption
 	});
 	
-	return doc;
+	_.forEach(DOM.findAll('style', doc), function(node) {
+		// TODO the following rewrites url() property values but isn't robust
+		var text = node.textContent;
+		var replacements = 0;
+		text = text.replace(/\burl\(\s*(['"]?)([^\r\n]*)\1\s*\)/ig, function(match, quote, url) {
+				absURL = baseURL.resolve(url);
+				if (absURL === url) return match;
+				replacements++;
+				return "url(" + quote + absURL + quote + ")";
+			});
+		if (replacements) node.textContent = text;
+	});
+
+	return resolveAll(doc, baseURL, false);
 }
 
-var scrollToId = function(id) { // FIXME this isn't being used
-	if (id) {
-		var el = DOM.findId(id);
-		if (el) el.scrollIntoView(true);
+/*
+	resolveAll() resolves all URL attributes
+*/
+var urlAttributes = URL.attributes;
+
+var resolveAll = function(doc, baseURL) {
+
+	return Promise.pipe(null, [
+
+	function () {
+		var selector = Object.keys(urlAttributes).join(', ');
+		return DOM.findAll(selector, doc);
+	},
+
+	function(nodeList) {
+		return Promise.reduce(null, nodeList, function(dummy, el) {
+			var tag = DOM.getTagName(el);
+			var attrList = urlAttributes[tag];
+			_.forOwn(attrList, function(attrDesc, attrName) {
+				if (!el.hasAttribute(attrName)) return;
+				attrDesc.resolve(el, baseURL);
+			});
+		});
+	},
+
+	function() {
+		return doc;
 	}
-	else window.scroll(0, 0);
+
+	]);
+
 }
 
-var readyStateLookup = { // used in domReady() and checkStyleSheets()
-	'uninitialized': false,
-	'loading': false,
-	'interactive': false,
-	'loaded': true,
-	'complete': true
+
+
+var htmlParser = Meeko.htmlParser = (function() {
+
+function nativeParser(html, details) {
+
+	return Promise.pipe(null, [
+		
+	function() {
+		var doc = (new DOMParser).parseFromString(html, 'text/html');
+		return normalize(doc, details);
+	}
+	
+	]);
+
 }
 
-var domReady = (function() { // WARN this assumes that document.readyState is valid or that content is ready...
-
-var readyState = document.readyState;
-var loaded = readyState ? readyStateLookup[readyState] : true;
-var queue = [];
-
-function domReady(fn) {
-	if (typeof fn !== 'function') return;
-	queue.push(fn);
-	if (loaded) processQueue();
+function innerHTMLParser(html, details) {
+	return Promise.pipe(null, [
+		
+	function() {
+		var doc = DOM.createHTMLDocument('');
+		var docElement = doc.documentElement;
+		docElement.innerHTML = html;
+		var m = html.match(/<html(?=\s|>)(?:[^>]*)>/i); // WARN this assumes there are no comments containing '<html' and no attributes containing '>'.
+		var div = document.createElement('div');
+		div.innerHTML = m[0].replace(/^<html/i, '<div');
+		var htmlElement = div.firstChild;
+		DOM.copyAttributes(docElement, htmlElement);
+		return doc;
+	},
+	
+	function(doc) {
+		return normalize(doc, details);
+	}
+	
+	]);
 }
 
-function processQueue() {
-	_.forEach(queue, function(fn) { setTimeout(fn); });
-	queue.length = 0;
-}
 
-var events = {
-	'DOMContentLoaded': document,
-	'load': window
-};
-
-if (!loaded) _.forOwn(events, function(node, type) { node.addEventListener(type, onLoaded, false); });
-
-return domReady;
-
-// NOTE the following functions are hoisted
-function onLoaded(e) {
-	loaded = true;
-	_.forOwn(events, function(node, type) { node.removeEventListener(type, onLoaded, false); });
-	processQueue();
+return {
+	HTML_IN_DOMPARSER: HTML_IN_DOMPARSER,
+	parse: HTML_IN_DOMPARSER ? nativeParser : innerHTMLParser,
+	normalize: normalize
 }
 
 })();
 
-/* 
-NOTE:  for more details on how checkStyleSheets() works cross-browser see 
-http://aaronheckmann.blogspot.com/2010/01/writing-jquery-plugin-manager-part-1.html
-TODO: does this still work when there are errors loading stylesheets??
-*/
-// TODO would be nice if this didn't need to be polled
-// TODO should be able to use <link>.onload, see
-// http://stackoverflow.com/a/13610128/108354
-// https://developer.mozilla.org/en-US/docs/Web/HTML/Element/link
-var checkStyleSheets = function() { 
-	// check that every <link rel="stylesheet" type="text/css" /> 
-	// has loaded
-	return _.every(DOM.findAll('link'), function(node) {
-		if (!node.rel || !/^stylesheet$/i.test(node.rel)) return true;
-		if (node.type && !/^text\/css$/i.test(node.type)) return true;
-		if (node.disabled) return true;
-		
-		// handle IE
-		if (node.readyState) return readyStateLookup[node.readyState];
 
-		var sheet = node.sheet || node.styleSheet;
 
-		// handle webkit
-		if (!sheet) return false;
+}).call(this);
+(function() {
 
-		try {
-			// Firefox should throw if not loaded or cross-domain
-			var rules = sheet.rules || sheet.cssRules;
-			return true;
-		} 
-		catch (error) {
-			// handle Firefox cross-domain
-			switch(error.name) {
-			case 'NS_ERROR_DOM_SECURITY_ERR': case 'SecurityError':
-				return true;
-			case 'NS_ERROR_DOM_INVALID_ACCESS_ERR': case 'InvalidAccessError':
-				return false;
-			default:
-				return true;
-			}
-		} 
-	});
-}
-
-_.defaults(DOM, {
-	copyAttributes: copyAttributes, removeAttributes: removeAttributes, // attrs
-	ready: domReady, checkStyleSheets: checkStyleSheets, // events
-	createDocument: createDocument, createHTMLDocument: createHTMLDocument, cloneDocument: cloneDocument, // documents
-	scrollToId: scrollToId
-});
-
-/* parseHTML are AJAX utilities */
-var parseHTML = function(html, details) {
-	var parser = new HTMLParser();
-	return parser.parse(html, details);
-}
-
-/* A few feature-detect constants for HTML loading & parsing */
+var window = this;
+var Meeko = window.Meeko;
+var _ = Meeko.stuff;
+var URL = Meeko.URL;
+var DOM = Meeko.DOM;
+var Promise = Meeko.Promise;
+var htmlParser = Meeko.htmlParser;
 
 /*
 	HTML_IN_XHR indicates if XMLHttpRequest supports HTML parsing
@@ -2642,156 +3219,6 @@ var HTML_IN_XHR = (function() { // FIXME more testing, especially Webkit
 	return true;
 })();
 
-/*
-	HTML_IN_DOMPARSER indicates if DOMParser supports 'text/html' parsing. Historically only Firefox did.
-	Cross-browser support coming? https://developer.mozilla.org/en-US/docs/Web/API/DOMParser#Browser_compatibility
-*/
-var HTML_IN_DOMPARSER = (function() {
-
-	try {
-		var doc = (new DOMParser).parseFromString('', 'text/html');
-		return !!doc;
-	}
-	catch(err) { return false; }
-
-})();
-
-_.defaults(DOM, {
-	parseHTML: parseHTML,
-	HTML_IN_XHR: HTML_IN_XHR, HTML_IN_DOMPARSER: HTML_IN_DOMPARSER
-});
-
-var CustomNS = Meeko.CustomNS = (function() {
-
-function CustomNS(options) {
-	if (!(this instanceof CustomNS)) return new CustomNS(options);
-	var style = options.style = _.lc(options.style);
-	var styleInfo = _.find(CustomNS.namespaceStyles, function(styleInfo) {
-		return styleInfo.style === style;
-	});
-	if (!styleInfo) throw Error('Unexpected namespace style: ' + style);
-	var name = options.name = _.lc(options.name);
-	if (!name) throw Error('Unexpected name: ' + name);
-	
-	var nsDef = this;
-	_.assign(nsDef, options);
-	var separator = styleInfo.separator;
-	nsDef.prefix = nsDef.name + separator;
-	nsDef.selectorPrefix = nsDef.name + (separator === ':' ? '\\:' : separator);
-}
-
-_.defaults(CustomNS.prototype, {
-
-lookupTagName: function(name) { return this.prefix + name; },
-lookupSelector: function(name) { return this.selectorPrefix + name; }
-
-});
-
-CustomNS.namespaceStyles = [
-	{
-		style: 'vendor',
-		configNamespace: 'custom',
-		separator: '-'
-	},
-	{
-		style: 'xml',
-		configNamespace: 'xmlns',
-		separator: ':'
-	}
-];
-
-_.forOwn(CustomNS.namespaceStyles, function(styleInfo) {
-	styleInfo.configPrefix = styleInfo.configNamespace + styleInfo.separator;
-});
-
-CustomNS.getNamespaces = function(doc) { // NOTE modelled on IE8, IE9 document.namespaces interface
-	var namespaces = [];
-	_.forEach(_.map(doc.documentElement.attributes), function(attr) {
-		var fullName = _.lc(attr.name);
-		var styleInfo = _.find(CustomNS.namespaceStyles, function(styleInfo) {
-			return (fullName.indexOf(styleInfo.configPrefix) === 0);
-		});
-		if (!styleInfo) return;
-		var name = fullName.substr(styleInfo.configPrefix.length);
-		var nsDef = new CustomNS({
-			urn: attr.value,
-			name: name,
-			style: styleInfo.style
-		});
-		namespaces.push(nsDef);
-	});
-	return namespaces;
-}
-
-return CustomNS;
-
-})();
-
-
-var URL = Meeko.URL = (function() {
-
-// TODO is this URL class compatible with the proposed DOM4 URL class??
-
-var URL = function(str) {
-	if (!(this instanceof URL)) return new URL(str);
-	this.parse(str);
-}
-
-var keys = ['source','protocol','hostname','port','pathname','search','hash'];
-var parser = /^([^:\/?#]+:)?(?:\/\/([^:\/?#]*)(?::(\d*))?)?([^?#]*)?(\?[^#]*)?(#.*)?$/;
-
-URL.prototype.parse = function parse(str) {
-	str = str.trim();
-	var	m = parser.exec(str);
-
-	for (var n=keys.length, i=0; i<n; i++) this[keys[i]] = m[i] || '';
-	this.protocol = _.lc(this.protocol);
-	this.supportsResolve = /^(http|https|ftp|file):$/i.test(this.protocol);
-	if (!this.supportsResolve) return;
-	this.hostname = _.lc(this.hostname);
-	this.host = this.hostname;
-	if (this.port) this.host += ':' + this.port;
-	this.origin = this.protocol + '//' + this.host;
-	if (this.pathname == '') this.pathname = '/';
-	var pathParts = this.pathname.split('/'); // creates an array of at least 2 strings with the first string empty: ['', ...]
-	pathParts.shift(); // leaves an array of at least 1 string [...]
-	this.filename = pathParts.pop(); // filename could be ''
-	this.basepath = pathParts.length ? '/' + pathParts.join('/') + '/' : '/'; // either '/rel-path-prepended-by-slash/' or '/'
-	this.base = this.origin + this.basepath;
-	this.nosearch = this.origin + this.pathname;
-	this.nohash = this.nosearch + this.search;
-	this.href = this.nohash + this.hash;
-	this.toString = function() { return this.href; }
-};
-
-URL.prototype.resolve = function resolve(relURL) {
-	relURL = relURL.trim();
-	if (!this.supportsResolve) return relURL;
-	var substr1 = relURL.charAt(0), substr2 = relURL.substr(0,2);
-	var absURL =
-		/^[a-zA-Z0-9-]+:/.test(relURL) ? relURL :
-		substr2 == '//' ? this.protocol + relURL :
-		substr1 == '/' ? this.origin + relURL :
-		substr1 == '?' ? this.nosearch + relURL :
-		substr1 == '#' ? this.nohash + relURL :
-		substr1 != '.' ? this.base + relURL :
-		substr2 == './' ? this.base + relURL.replace('./', '') :
-		(function() {
-			var myRel = relURL;
-			var myDir = this.basepath;
-			while (myRel.substr(0,3) == '../') {
-				myRel = myRel.replace('../', '');
-				myDir = myDir.replace(/[^\/]+\/$/, '');
-			}
-			return this.origin + myDir + myRel;
-		}).call(this);
-	return absURL;
-}
-
-
-return URL;
-
-})();
 
 var httpProxy = Meeko.httpProxy = (function() {
 
@@ -2838,6 +3265,8 @@ function cacheMatch(request, entry) {
 
 var httpProxy = {
 
+HTML_IN_XHR: HTML_IN_XHR,
+
 add: function(response) { // NOTE this is only for the landing page
 	var url = response.url;
 	if (!url) throw Error('Invalid url in response object');
@@ -2849,7 +3278,7 @@ add: function(response) { // NOTE this is only for the landing page
 	return Promise.pipe(undefined, [
 
 	function() {
-		return normalize(response.document, request);
+		return htmlParser.normalize(response.document, request);
 	},
 	function(doc) {
 		response.document = doc;
@@ -2953,14 +3382,14 @@ function handleResponse(xhr, info) { // TODO handle info.responseType
 		statusText: xhr.statusText
 	};
 	if (HTML_IN_XHR) {
-		return normalize(xhr.response, info)
+		return htmlParser.normalize(xhr.response, info)
 		.then(function(doc) {
 			response.document = doc;
 			return response;
 		});
 	}
 	else {
-		return DOM.parseHTML(new String(xhr.responseText), info)
+		return htmlParser.parse(new String(xhr.responseText), info)
 		.then(function(doc) {
 				response.document = doc;
 				return response;
@@ -2972,360 +3401,17 @@ return httpProxy;
 
 })();
 
+}).call(this);
 
-var urlAttributes = URL.attributes = (function() {
-	
-var AttributeDescriptor = function(tagName, attrName, loads, compound) {
-	var testEl = document.createElement(tagName);
-	var supported = attrName in testEl;
-	var lcAttr = _.lc(attrName); // NOTE for longDesc, etc
-	_.defaults(this, { // attrDesc
-		tagName: tagName,
-		attrName: attrName,
-		loads: loads,
-		compound: compound,
-		supported: supported
-	});
-}
+(function() {
 
-_.defaults(AttributeDescriptor.prototype, {
-
-resolve: function(el, baseURL) {
-	var attrName = this.attrName;
-	var url = el.getAttribute(attrName);
-	if (url == null) return;
-	var finalURL = this.resolveURL(url, baseURL)
-	if (finalURL !== url) el.setAttribute(attrName, finalURL);
-},
-
-resolveURL: function(url, baseURL) {
-	var relURL = url.trim();
-	var finalURL = relURL;
-	switch (relURL.charAt(0)) {
-		case '': // empty, but not null. TODO should this be a warning??
-			break;
-		
-		default:
-			finalURL = baseURL.resolve(relURL);
-			break;
-	}
-	return finalURL;
-}
-
-});
-
-var urlAttributes = {};
-_.forEach(_.words('link@<href script@<src img@<longDesc,<src,+srcset iframe@<longDesc,<src object@<data embed@<src video@<poster,<src audio@<src source@<src,+srcset input@formAction,<src button@formAction,<src a@+ping,href area@href q@cite blockquote@cite ins@cite del@cite form@action'), function(text) {
-	var m = text.split('@'), tagName = m[0], attrs = m[1];
-	var attrList = urlAttributes[tagName] = {};
-	_.forEach(attrs.split(','), function(attrName) {
-		var downloads = false;
-		var compound = false;
-		var modifier = attrName.charAt(0);
-		switch (modifier) {
-		case '<':
-			downloads = true;
-			attrName = attrName.substr(1);
-			break;
-		case '+':
-			compound = true;
-			attrName = attrName.substr(1);
-			break;
-		}
-		attrList[attrName] = new AttributeDescriptor(tagName, attrName, downloads, compound);
-	});
-});
-
-function resolveSrcset(urlSet, baseURL) {
-	var urlList = urlSet.split(/\s*,\s*/); // FIXME this assumes URLs don't contain ','
-	_.forEach(urlList, function(urlDesc, i) {
-		urlList[i] = urlDesc.replace(/^\s*(\S+)(?=\s|$)/, function(all, url) { return baseURL.resolve(url); });
-	});
-	return urlList.join(', ');
-}
-
-urlAttributes['img']['srcset'].resolveURL = resolveSrcset;
-urlAttributes['source']['srcset'].resolveURL = resolveSrcset;
-
-urlAttributes['a']['ping'].resolveURL = function(urlSet, baseURL) {
-	var urlList = urlSet.split(/\s+/);
-	_.forEach(urlList, function(url, i) {
-		urlList[i] = baseURL.resolve(url);
-	});
-	return urlList.join(' ');
-}
-
-return urlAttributes;
-
-})();
-
-/*
-	resolveAll() resolves all URL attributes
-*/
-var resolveAll = function(doc, baseURL) {
-
-	return Promise.pipe(null, [
-
-	function () {
-		var selector = Object.keys(urlAttributes).join(', ');
-		return DOM.findAll(selector, doc);
-	},
-
-	function(nodeList) {
-		return Promise.reduce(null, nodeList, function(dummy, el) {
-			var tag = DOM.getTagName(el);
-			var attrList = urlAttributes[tag];
-			_.forOwn(attrList, function(attrDesc, attrName) {
-				if (!el.hasAttribute(attrName)) return;
-				attrDesc.resolve(el, baseURL);
-			});
-		});
-	},
-
-	function() {
-		return doc;
-	}
-
-	]);
-
-}
-
-
-
-/*
-	normalize() is called between html-parsing (internal) and document normalising (external function).
-	It is called after using the native parser:
-	- with DOMParser#parseFromString(), see HTMLParser#nativeParser()
-	- with XMLHttpRequest & xhr.responseType='document', see httpProxy's request()
-	The innerHTMLParser also uses this call
-*/
-function normalize(doc, details) { 
-
-	var baseURL = URL(details.url);
-
-	_.forEach(DOM.findAll('style', doc.body), function(node) { // TODO support <style scoped>
-		doc.head.appendChild(node); // NOTE no adoption
-	});
-	
-	_.forEach(DOM.findAll('style', doc.head), function(node) {
-		// TODO the following rewrites url() property values but isn't robust
-		var text = node.textContent;
-		var replacements = 0;
-		text = text.replace(/\burl\(\s*(['"]?)([^\r\n]*)\1\s*\)/ig, function(match, quote, url) {
-				absURL = baseURL.resolve(url);
-				if (absURL === url) return match;
-				replacements++;
-				return "url(" + quote + absURL + quote + ")";
-			});
-		if (replacements) node.textContent = text;
-	});
-
-	return resolveAll(doc, baseURL, false);
-}
-
-var HTMLParser = Meeko.HTMLParser = (function() {
-
-var HTMLParser = function() { // TODO should this receive options
-	if (this instanceof HTMLParser) return;
-	return new HTMLParser();
-}
-
-function nativeParser(html, details) {
-
-	return Promise.pipe(null, [
-		
-	function() {
-		var doc = (new DOMParser).parseFromString(html, 'text/html');
-		return normalize(doc, details);
-	}
-	
-	]);
-
-}
-
-function innerHTMLParser(html, details) {
-	return Promise.pipe(null, [
-		
-	function() {
-		var doc = DOM.createHTMLDocument('');
-		var docElement = doc.documentElement;
-		docElement.innerHTML = html;
-		var m = html.match(/<html(?=\s|>)(?:[^>]*)>/i); // WARN this assumes there are no comments containing '<html' and no attributes containing '>'.
-		var div = document.createElement('div');
-		div.innerHTML = m[0].replace(/^<html/i, '<div');
-		var htmlElement = div.firstChild;
-		DOM.copyAttributes(docElement, htmlElement);
-		return doc;
-	},
-	
-	function(doc) {
-		return normalize(doc, details);
-	}
-	
-	]);
-}
-
-
-_.defaults(HTMLParser.prototype, {
-	parse: HTML_IN_DOMPARSER ? nativeParser : innerHTMLParser
-});
-
-return HTMLParser;
-
-})();
-
-
-var scriptQueue = new function() {
-
-/*
- WARN: This description comment was from the former scriptQueue implementation.
- It is still a correct description of behavior,
- but doesn't give a great insight into the current Promises-based implementation.
- 
- We want <script>s to execute in document order (unless @async present)
- but also want <script src>s to download in parallel.
- The script queue inserts scripts until it is paused on a blocking script.
- The onload (or equivalent) or onerror handlers of the blocking script restart the queue.
- Inline <script> and <script src="..." async> are never blocking.
- Sync <script src> are blocking, but if `script.async=false` is supported by the browser
- then only the last <script src> (in a series of sync scripts) needs to pause the queue. See
-	http://wiki.whatwg.org/wiki/Dynamic_Script_Execution_Order#My_Solution
- Script preloading is always initiated, even if the browser doesn't support it. See
-	http://wiki.whatwg.org/wiki/Dynamic_Script_Execution_Order#readyState_.22preloading.22
-	
- FIXME scriptQueue.push should also accept functions
-*/
-var queue = [],
-	emptying = false;
-
-var testScript = document.createElement('script'),
-	supportsSync = (testScript.async === true);
-
-this.push = function(node) {
-return new Promise(function(resolve, reject) {
-	if (emptying) throw Error('Attempt to append script to scriptQueue while emptying');
-	
-	// TODO assert node is in document
-
-	// TODO this filtering may need reworking now we don't support older browsers
-	if (!node.type || /^text\/javascript$/i.test(node.type)) {
-		logger.info('Attempt to queue already executed script ' + node.src);
-		resolve(); // TODO should this be reject() ??
-		return;
-	}
-
-	if (!/^text\/javascript\?disabled$/i.test(node.type)) {
-		logger.info('Unsupported script-type ' + node.type);
-		resolve(); // TODO should this be reject() ??
-		return;
-	}
-
-	var script = document.createElement('script');
-
-	if (node.src) addListeners(); // WARN must use `node.src` because attrs not copied to `script` yet
-	
-	DOM.copyAttributes(script, node); 
-	script.text = node.text;
-
-	if (script.getAttribute('defer')) { // @defer is not appropriate. Implement as @async
-		script.removeAttribute('defer');
-		script.setAttribute('async', '');
-		logger.warn('@defer not supported on scripts');
-	}
-	if (supportsSync && script.src && !script.hasAttribute('async')) script.async = false;
-	script.type = 'text/javascript';
-	
-	// enabledFu resolves after script is inserted
-	var enabledFu = Promise.applyTo(); 
-	
-	var prev = queue[queue.length - 1], prevScript = prev && prev.script;
-
-	var triggerFu; // triggerFu allows this script to be enabled, i.e. inserted
-	if (prev) {
-		if (prevScript.hasAttribute('async') || script.src && supportsSync && !script.hasAttribute('async')) triggerFu = prev.enabled;
-		else triggerFu = prev.complete; 
-	}
-	else triggerFu = Promise.resolve();
-	
-	triggerFu.then(enable, enable);
-
-	var completeFu = Promise.applyTo();
-	completeFu.then(resolve, reject);
-
-	var current = { script: script, complete: completeFu, enabled: enabledFu };
-	queue.push(current);
-	return;
-
-	// The following are hoisted
-	function enable() {
-		DOM.insertNode('replace', node, script);
-		enabledFu.resolve(); 
-		if (!script.src) {
-			spliceItem(queue, current);
-			completeFu.resolve();
-		}
-	}
-	
-	function onLoad(e) {
-		removeListeners();
-		spliceItem(queue, current);
-		completeFu.resolve();
-	}
-
-	function onError(e) {
-		removeListeners();
-		spliceItem(queue, current);
-		completeFu.reject(function() { throw Error('Script loading failed'); }); // FIXME throw NetworkError()
-	}
-
-	function addListeners() {
-		script.addEventListener('load', onLoad, false);
-		script.addEventListener('error', onError, false);
-	}
-	
-	function removeListeners() {
-		script.removeEventListener('load', onLoad, false);
-		script.removeEventListener('error', onError, false);
-	}
-	
-	function spliceItem(a, item) {
-		for (var n=a.length, i=0; i<n; i++) {
-			if (a[i] !== item) continue;
-			a.splice(i, 1);
-			return;
-		}
-	}
-
-});
-}
-
-this.empty = function() {
-return new Promise(function(resolve, reject) {
-	
-	emptying = true;
-	if (queue.length <= 0) {
-		emptying = false;
-		resolve();
-		return;
-	}
-	_.forEach(queue, function(value, i) {
-		var acceptCallback = function() {
-			if (queue.length <= 0) {
-				emptying = false;
-				resolve();
-			}
-		}
-		value.complete.then(acceptCallback, acceptCallback);
-	});
-
-});
-}
-
-} // end scriptQueue
-
+var window = this;
+var Meeko = window.Meeko;
+var _ = Meeko.stuff;
+var Promise = Meeko.Promise;
 
 // wrapper for `history` mostly to provide locking around state-updates and throttling of popstate events
-var historyManager = (function() {
+var historyManager = Meeko.historyManager = (function() {
 
 var historyManager = {};
 
@@ -3382,7 +3468,7 @@ if (history.replaceState) window.addEventListener('popstate', function(e) {
 		
 		var newSettings = e.state;
 		if (!newSettings[stateTag]) {
-			logger.warn('Ignoring invalid PopStateEvent');
+			console.warn('Ignoring invalid PopStateEvent');
 			return;
 		}
 		scheduler.reset(function() {
@@ -3489,22 +3575,2312 @@ return scheduler;
 })();
 
 
-/* BEGIN HFrameset code */
+}).call(this);
 
+
+(function() {
+
+var global = this;
+var Meeko = global.Meeko;
+var _ = Meeko.stuff;
+
+var CustomNamespace = Meeko.CustomNamespace = (function() {
+
+function CustomNamespace(options) {
+	if (!(this instanceof CustomNamespace)) return new CustomNamespace(options);
+	if (!options) return; // WARN for cloning / inheritance
+	var style = options.style = _.lc(options.style);
+	var styleInfo = _.find(CustomNamespace.namespaceStyles, function(styleInfo) {
+		return styleInfo.style === style;
+	});
+	if (!styleInfo) throw Error('Unexpected namespace style: ' + style);
+	var name = options.name = _.lc(options.name);
+	if (!name) throw Error('Unexpected name: ' + name);
+	
+	var nsDef = this;
+	_.assign(nsDef, options);
+	var separator = styleInfo.separator;
+	nsDef.prefix = nsDef.name + separator;
+	nsDef.selectorPrefix = nsDef.name + (separator === ':' ? '\\:' : separator);
+}
+
+_.defaults(CustomNamespace.prototype, {
+
+clone: function() {
+	var clone = new CustomNamespace();
+	_.assign(clone, this);
+	return clone;
+},
+
+lookupTagName: function(name) { return this.prefix + name; },
+lookupSelector: function(name) { return this.selectorPrefix + name; }
+
+});
+
+CustomNamespace.namespaceStyles = [
+	{
+		style: 'vendor',
+		configNamespace: 'custom',
+		separator: '-'
+	},
+	{
+		style: 'xml',
+		configNamespace: 'xmlns',
+		separator: ':'
+	}
+];
+
+_.forOwn(CustomNamespace.namespaceStyles, function(styleInfo) {
+	styleInfo.configPrefix = styleInfo.configNamespace + styleInfo.separator;
+});
+
+CustomNamespace.getNamespaces = function(doc) { // NOTE modelled on IE8, IE9 document.namespaces interface
+	return new NamespaceCollection(doc);
+}
+
+return CustomNamespace;
+
+})();
+
+var NamespaceCollection = Meeko.NamespaceCollection = function(doc) { 
+	if (!(this instanceof NamespaceCollection)) return new NamespaceCollection(doc);
+	this.items = [];
+	if (!doc) return; // WARN for cloning / inheritance
+	this.init(doc); 
+}
+
+_.assign(NamespaceCollection.prototype, {
+
+init: function(doc) {
+	var coll = this;
+	_.forEach(_.map(doc.documentElement.attributes), function(attr) {
+		var fullName = _.lc(attr.name);
+		var styleInfo = _.find(CustomNamespace.namespaceStyles, function(styleInfo) {
+			return (fullName.indexOf(styleInfo.configPrefix) === 0);
+		});
+		if (!styleInfo) return;
+		var name = fullName.substr(styleInfo.configPrefix.length);
+		var nsDef = new CustomNamespace({
+			urn: attr.value,
+			name: name,
+			style: styleInfo.style
+		});
+		coll.add(nsDef);
+	});
+},
+
+clone: function() {
+	var coll = new NamespaceCollection();
+	_.forEach(this.items, function(nsDef) { 
+		coll.items.push(nsDef.clone());
+	});
+	return coll;
+},
+
+add: function(nsDef) {
+	var coll = this;
+	var matchingNS = _.find(coll.items, function(def) {
+		if (_.lc(def.urn) === _.lc(nsDef.urn)) {
+			if (def.prefix !== nsDef.prefix) console.warn('Attempted to add namespace with same urn as one already present: ' + def.urn);
+			return true;
+		}
+		if (def.prefix === nsDef.prefix) {
+			if (_.lc(def.urn) !== _.lc(nsDef.urn)) console.warn('Attempted to add namespace with same prefix as one already present: ' + def.prefix);
+			return true;
+		}
+	});
+	if (matchingNS) return;
+	coll.items.push(nsDef);
+},
+
+lookupNamespace: function(urn) {
+	var coll = this;
+	urn = _.lc(urn);
+	var nsDef = _.find(coll.items, function(def) {
+		return (_.lc(def.urn) === urn);
+	});
+	return nsDef;
+},
+
+
+lookupPrefix: function(urn) {
+	var coll = this;
+	var nsDef = coll.lookupNamespace(urn);
+	return nsDef && nsDef.prefix;
+},
+
+lookupNamespaceURI: function(prefix) {
+	var coll = this;
+	prefix = _.lc(prefix);
+	var nsDef = _.find(coll.items, function(def) {
+		return (def.prefix === prefix);
+	});
+	return nsDef && nsDef.urn;
+},
+
+lookupTagNameNS: function(name, urn) {
+	var coll = this;
+	var nsDef = coll.lookupNamespace(urn);
+	if (!nsDef) return name; // TODO is this correct?
+	return nsDef.prefix + name; // TODO _.lc(name) ??
+},
+
+lookupSelector: function(selector, urn) {
+	var nsDef = this.lookupNamespace(urn);
+	if (!nsDef) return selector;
+	var tags = selector.split(/\s*,\s*|\s+/);
+	return _.map(tags, function(tag) { return nsDef.lookupSelector(tag); }).join(', ');
+}
+
+});
+
+
+
+}).call(this);
+(function(classnamespace) {
+
+var global = this;
+var Meeko = global.Meeko;
+var _ = Meeko.stuff;
+
+var Registry = function(options) {
+	if (!options || typeof options !== 'object') options = {};
+	this.options = options;
+	this.items = {};
+}
+
+_.assign(Registry.prototype, {
+
+clear: function() {
+	if (this.options.writeOnce) throw Error('Attempted to clear write-once storage');
+	this.items = Object.create(null);
+},
+
+has: function(key) {
+	return key in this.items;
+},
+
+get: function(key) {
+	return this.items[key];
+},
+
+set: function(key, value) {
+	if (this.options.writeOnce && this.has(key)) {
+		throw Error('Attempted to rewrite key ' + key + ' in write-once storage');
+	}
+	if (this.options.keyTest) {
+		var ok = this.options.keyTest(key);
+		if (!ok) throw Error('Invalid key ' + key + ' for storage');
+	}
+	if (this.options.valueTest) {
+		var ok = this.options.valueTest(value);
+		if (!ok) throw Error('Invalid value ' + value + ' for storage');
+	}
+	this.items[key] = value;
+},
+
+'delete': function(key) {
+	if (this.options.writeOnce && this.has(key)) {
+		throw Error('Attempted to delete key ' + key + ' in write-once storage');
+	}
+	delete this.items[key];
+}
+
+});
+
+Registry.prototype.register = Registry.prototype.set;
+
+classnamespace.Registry = Registry;
+
+}).call(this, this.Meeko);
+/*
+ * Date Format 1.2.3
+ * (c) 2007-2009 Steven Levithan <stevenlevithan.com>
+ * MIT license
+ *
+ * Includes enhancements by Scott Trenda <scott.trenda.net>
+ * and Kris Kowal <cixar.com/~kris.kowal/>
+ *
+ * Accepts a date, a mask, or a date and a mask.
+ * Returns a formatted version of the given date.
+ * The date defaults to the current date/time.
+ * The mask defaults to dateFormat.masks.default.
+ */
+
+Meeko.stuff.dateFormat = (function() {
+
+var dateFormat = function () {
+	var	token = /d{1,4}|m{1,4}|yy(?:yy)?|([HhMsTt])\1?|[LloSZ]|"[^"]*"|'[^']*'/g,
+		timezone = /\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g,
+		timezoneClip = /[^-+\dA-Z]/g,
+		pad = function (val, len) {
+			val = String(val);
+			len = len || 2;
+			while (val.length < len) val = "0" + val;
+			return val;
+		};
+
+	// Regexes and supporting functions are cached through closure
+	return function (date, mask, utc) {
+		var dF = dateFormat;
+
+		// You can't provide utc if you skip other args (use the "UTC:" mask prefix)
+		if (arguments.length == 1 && Object.prototype.toString.call(date) == "[object String]" && !/\d/.test(date)) {
+			mask = date;
+			date = undefined;
+		}
+
+		// Passing date through Date applies Date.parse, if necessary
+		date = date ? new Date(date) : new Date;
+		if (isNaN(date)) throw SyntaxError("invalid date");
+
+		mask = String(dF.masks[mask] || mask || dF.masks["default"]);
+
+		// Allow setting the utc argument via the mask
+		if (mask.slice(0, 4) == "UTC:") {
+			mask = mask.slice(4);
+			utc = true;
+		}
+
+		var	_ = utc ? "getUTC" : "get",
+			d = date[_ + "Date"](),
+			D = date[_ + "Day"](),
+			m = date[_ + "Month"](),
+			y = date[_ + "FullYear"](),
+			H = date[_ + "Hours"](),
+			M = date[_ + "Minutes"](),
+			s = date[_ + "Seconds"](),
+			L = date[_ + "Milliseconds"](),
+			o = utc ? 0 : date.getTimezoneOffset(),
+			flags = {
+				d:    d,
+				dd:   pad(d),
+				ddd:  dF.i18n.dayNames[D],
+				dddd: dF.i18n.dayNames[D + 7],
+				m:    m + 1,
+				mm:   pad(m + 1),
+				mmm:  dF.i18n.monthNames[m],
+				mmmm: dF.i18n.monthNames[m + 12],
+				yy:   String(y).slice(2),
+				yyyy: y,
+				h:    H % 12 || 12,
+				hh:   pad(H % 12 || 12),
+				H:    H,
+				HH:   pad(H),
+				M:    M,
+				MM:   pad(M),
+				s:    s,
+				ss:   pad(s),
+				l:    pad(L, 3),
+				L:    pad(L > 99 ? Math.round(L / 10) : L),
+				t:    H < 12 ? "a"  : "p",
+				tt:   H < 12 ? "am" : "pm",
+				T:    H < 12 ? "A"  : "P",
+				TT:   H < 12 ? "AM" : "PM",
+				Z:    utc ? "UTC" : (String(date).match(timezone) || [""]).pop().replace(timezoneClip, ""),
+				o:    (o > 0 ? "-" : "+") + pad(Math.floor(Math.abs(o) / 60) * 100 + Math.abs(o) % 60, 4),
+				S:    ["th", "st", "nd", "rd"][d % 10 > 3 ? 0 : (d % 100 - d % 10 != 10) * d % 10]
+			};
+
+		return mask.replace(token, function ($0) {
+			return $0 in flags ? flags[$0] : $0.slice(1, $0.length - 1);
+		});
+	};
+}();
+
+// Some common format strings
+dateFormat.masks = {
+	"default":      "ddd mmm dd yyyy HH:MM:ss",
+	shortDate:      "m/d/yy",
+	mediumDate:     "mmm d, yyyy",
+	longDate:       "mmmm d, yyyy",
+	fullDate:       "dddd, mmmm d, yyyy",
+	shortTime:      "h:MM TT",
+	mediumTime:     "h:MM:ss TT",
+	longTime:       "h:MM:ss TT Z",
+	isoDate:        "yyyy-mm-dd",
+	isoTime:        "HH:MM:ss",
+	isoDateTime:    "yyyy-mm-dd'T'HH:MM:ss",
+	isoUtcDateTime: "UTC:yyyy-mm-dd'T'HH:MM:ss'Z'"
+};
+
+// Internationalization strings
+dateFormat.i18n = {
+	dayNames: [
+		"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
+		"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+	],
+	monthNames: [
+		"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+		"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
+	]
+};
+
+return dateFormat;
+
+}).call(window);
+
+
+
+(function(classnamespace) {
+
+var global = this;
+var Meeko = global.Meeko;
+var _ = Meeko.stuff;
+var Registry = Meeko.Registry;
+
+var filters = new Registry({
+	writeOnce: true,
+	testKey: function(key) {
+		return /^[_a-zA-Z][_a-zA-Z0-9]*$/.test(key);
+	},
+	testValue: function(fn) {
+		return typeof fn === 'function';
+	}
+});
+
+_.assign(filters, {
+
+evaluate: function(name, value, params) {
+	var fn = this.get(name);
+	// NOTE filter functions should only accept string_or_number_or_boolean
+	// FIXME Need to wrap fn() to assert / cast supplied value and accept params
+	var args = params.slice(0);
+	args.unshift(value);
+	return fn.apply(undefined, args);
+}
+
+});
+
+classnamespace.filters = filters;
+
+}).call(this, this.Meeko);
+
+
+
+
+(function() {
+
+var global = this;
+var Meeko = global.Meeko;
+var _ = Meeko.stuff;
+var filters = Meeko.filters;
+
+// FIXME filters need sanity checking
+filters.register('lowercase', function(value, text) {
+	return value.toLowerCase();
+});
+
+filters.register('uppercase', function(value, text) {
+	return value.toUpperCase();
+});
+
+filters.register('if', function(value, yep) {
+	return (!!value) ? yep : value;
+});
+
+filters.register('unless', function(value, nope) {
+	return (!value) ? nope : value;
+});
+
+filters.register('if_unless', function(value, yep, nope) {
+	return (!!value) ? yep : nope;
+});
+
+filters.register('map', function(value, dict) { // dict can be {} or []
+
+	if (Array.isArray(dict)) {
+		var patterns = _.filter(dict, function(item, i) { return !(i % 2); });
+		var results = _.filter(dict, function(item, i) { return !!(i % 2); });
+		_.some(patterns, function(pattern, i) {
+			// FIXME what if pattern not RegExp && not string??
+			if (!(pattern instanceof RegExp)) pattern = new RegExp('^' + pattern + '$');
+			if (!pattern.test(value)) return false;
+			value = results[i];
+			return true;
+		});
+		return value;
+	}
+
+	if (value in dict) return dict[value]; // TODO sanity check before returning
+	return value;
+});
+
+filters.register('match', function(value, pattern, yep, nope) {
+	// FIXME what if pattern not RegExp && not string??
+	if (!(pattern instanceof RegExp)) pattern = new RegExp('^' + pattern + '$'); // FIXME sanity TODO case-insensitive??
+	var bMatch = pattern.test(value);
+	if (yep != null && bMatch) return yep;
+	if (nope != null && !bMatch) return nope;
+	return bMatch;
+});
+
+filters.register('replace', function(value, pattern, text) {
+	return value.replace(pattern, text); // TODO sanity check before returning
+});
+
+if (_.dateFormat) filters.register('date', function(value, format, utc) {
+	return _.dateFormat(value, format, utc);
+});
+
+
+}).call(this);
+
+
+
+(function(classnamespace) {
+
+var global = this;
+
+var Meeko = global.Meeko;
+var _ = Meeko.stuff;
+var Registry = Meeko.Registry;
+
+var decoders = new Registry({
+	writeOnce: true,
+	testKey: function(key) {
+		return typeof key === 'string' && /^[_a-zA-Z][_a-zA-Z0-9]*/.test(key);
+	},
+	testValue: function(constructor) {
+		return typeof constructor === 'function';
+	}
+});
+
+_.assign(decoders, {
+
+create: function(type, options, namespaces) {
+	var constructor = this.get(type);
+	return new constructor(options, namespaces);
+}
+
+});
+
+classnamespace.decoders = decoders;
+
+}).call(this, this.Meeko);
+(function(classnamespace) {
+
+var global = this;
+
+var Meeko = global.Meeko;
+var _ = Meeko.stuff;
+var DOM = Meeko.DOM;
+var decoders = Meeko.decoders;
+
+// FIXME textAttr & htmlAttr used in HazardProcessor & CSSDecoder
+var textAttr = '_text';
+var htmlAttr = '_html';
+// TODO what about tagnameAttr, namespaceAttr
+
+CSS_CONTEXT_VARIABLE = '_';
+
+function CSSDecoder(options, namespaces) {}
+
+_.defaults(CSSDecoder.prototype, {
+
+init: function(node) {
+	this.srcNode = node;
+},
+
+// TODO should matches() support Hazard variables
+matches: function(element, query) { // FIXME refactor common-code in matches / evaluate
+	var queryParts = query.match(/^\s*([^{]*)\s*(?:\{\s*([^}]*)\s*\}\s*)?$/);
+	var selector = queryParts[1];
+	var attr = queryParts[2];
+	var result;
+	if (!matches(element, selector)) return;
+	var node = element;
+	var result = node;
+
+	if (attr) {
+		attr = attr.trim();
+		if (attr.charAt(0) === '@') attr = attr.substr(1);
+		result = getAttr(node, attr);
+	}
+
+	return result;
+
+	function getAttr(node, attr) {
+		switch(attr) {
+		case null: case undefined: case '': return node;
+		case textAttr: 
+			return node.textContent;
+		case htmlAttr:
+			var frag = doc.createDocumentFragment();
+			_.forEach(node.childNodes, function(child) { 
+				frag.appendChild(doc.importNode(child, true)); // TODO does `child` really need to be cloned??
+			});
+			return frag;
+		default: 
+			return node.getAttribute(attr);
+		}
+	}
+
+
+},
+
+evaluate: function(query, context, variables, wantArray) {
+	if (!context) context = this.srcNode;
+	var doc = context.nodeType === 9 ? context : context.ownerDocument; // FIXME which document??
+	var queryParts = query.match(/^\s*([^{]*)\s*(?:\{\s*([^}]*)\s*\}\s*)?$/);
+	var selector = queryParts[1];
+	var attr = queryParts[2];
+	var result = find(selector, context, variables, wantArray);
+
+	if (attr) {
+		attr = attr.trim();
+		if (attr.charAt(0) === '@') attr = attr.substr(1);
+
+		if (!wantArray) result = [ result ];
+		result = _.map(result, function(node) {
+			return getAttr(node, attr);
+		});
+		if (!wantArray) result = result[0];
+	}
+
+	return result;
+
+	function getAttr(node, attr) {
+		switch(attr) {
+		case null: case undefined: case '': return node;
+		case textAttr: 
+			return node.textContent;
+		case htmlAttr:
+			var frag = doc.createDocumentFragment();
+			_.forEach(node.childNodes, function(child) { 
+				frag.appendChild(doc.importNode(child, true)); // TODO does `child` really need to be cloned??
+			});
+			return frag;
+		default: 
+			return node.getAttribute(attr);
+		}
+	}
+
+}
+
+});
+
+function matches(element, selectorGroup) {
+	if (selectorGroup.trim() === '') return;
+	return DOM.matches(element, selectorGroup);
+}
+
+function find(selectorGroup, context, variables, wantArray) { // FIXME currently only implements `context` expansion
+	selectorGroup = selectorGroup.trim();
+	if (selectorGroup === '') return wantArray ? [ context ] : context;
+	var nullResult = wantArray ? [] : null;
+	var selectors = selectorGroup.split(/,(?![^\(]*\)|[^\[]*\])/);
+	selectors = _.map(selectors, function(s) { return s.trim(); });
+
+	var invalidVarUse = false;
+	var contextVar;
+	_.forEach(selectors, function(s, i) {
+		var m = s.match(/\\?\$[_a-zA-Z][_a-zA-Z0-9]*\b/g);
+		if (!m) {
+			if (i > 0 && contextVar) {
+				invalidVarUse = true;
+				console.warn('All individual selectors in a selector-group must share same context: ' + selectorGroup);
+			}
+			return; // if no matches then m will be null not []
+		}
+		_.forEach(m, function(varRef, j) {
+			if (varRef.charAt(0) === '\\') return; // Ignore "\$"
+			var varName = varRef.substr(1);
+			var varPos = s.indexOf(varRef);
+			if (j > 0 || varPos > 0) {
+				invalidVarUse = true;
+				console.warn('Invalid use of ' + varRef + ' in ' + selectorGroup);
+				return;
+			}
+			if (i > 0) {
+				if (varName !== contextVar) {
+					invalidVarUse = true;
+					console.warn('All individual selectors in a selector-group must share same context: ' + selectorGroup);
+				}
+				return;
+			}
+			contextVar = varName;
+		});
+	});
+
+	if (invalidVarUse) {
+		console.error('Invalid use of variables in CSS selector. Assuming no match.');
+		return nullResult;
+	}
+
+	if (contextVar && contextVar !== CSS_CONTEXT_VARIABLE) {
+		if (!variables.has(contextVar)) {
+			console.debug('Context variable $' + contextVar + ' not defined for ' + selectorGroup);
+			return nullResult;
+		}
+		if (contextVar !== CSS_CONTEXT_VARIABLE) context = variables.get(contextVar);
+
+		// NOTE if the selector is just '$variable' then 
+		// context doesn't even need to be a node
+		if (selectorGroup === '$' + contextVar) return context;
+
+		if (!(context && context.nodeType === 1)) {
+			console.debug('Context variable $' + contextVar + ' not an element in ' + selectorGroup);
+			return nullResult;
+		}
+	}
+
+	var isRoot = false;
+	if (context.nodeType === 9 || context.nodeType === 11) isRoot = true;
+
+	selectors = _.filter(selectors, function(s) {
+			switch(s.charAt(0)) {
+			case '+': case '~': 
+				console.warn('Siblings of context-node cannot be selected in ' + selectorGroup);
+				return false;
+			case '>': return (isRoot) ? false : true; // FIXME probably should be allowed even if isRoot
+			default: return true;
+			}
+		});
+
+	if (selectors.length <= 0) return nullResult;
+
+	selectors = _.map(selectors, function(s) {
+			if (isRoot) return s;
+			var prefix = ':scope';
+			return (contextVar) ? 
+				s.replace('$' + contextVar, prefix) : 
+				prefix + ' ' + s;
+		});
+	
+	var finalSelector = selectors.join(', ');
+
+	if (wantArray) {
+		return DOM.findAll(finalSelector, context, !isRoot, !isRoot);
+	}
+	else {
+		return DOM.find(finalSelector, context, !isRoot, !isRoot);
+	}
+}
+
+function markElement(context) {
+	if (context.hasAttribute(DOM.uniqueIdAttr)) return context.getAttribute(DOM.uniqueIdAttr);
+	var uid = DOM.uniqueId(context);
+	context.setAttribute(DOM.uniqueIdAttr, uid);
+	return uid;
+}
+
+
+_.assign(classnamespace, {
+
+CSSDecoder: CSSDecoder
+
+});
+
+}).call(this, this.Meeko);
+(function(classnamespace) {
+
+var window = this;
+var document = window.document;
+
+var Meeko = window.Meeko;
+var _ = Meeko.stuff;
+var DOM = Meeko.DOM;
+var decoders = Meeko.decoders;
+
+var Microdata = (function() {
+
+function intersects(a1, a2) { // TODO add to Meeko.stuff
+	return _.some(a1, function(i1) {
+		return _.some(a2, function(i2) { 
+			return i2 === i1; 
+		});
+	});
+}
+
+function walkTree(root, skipRoot, callback) { // callback(el) must return NodeFilter code
+	var walker = document.createNodeIterator(
+			root,
+			1,
+			acceptNode,
+			null // IE9 throws if this irrelavent argument isn't passed
+		);
+	
+	var el;
+	while (el = walker.nextNode());
+
+	function acceptNode(el) {
+		if (skipRoot && el === root) return NodeFilter.FILTER_SKIP;
+		return callback(el);
+	}
+}
+
+// TODO copied from DOMSprockets. Could be a generic "class"
+
+var nodeIdProperty = '__microdata__';
+var nodeCount = 0; // used to generated node IDs
+var nodeStorage = {}; // hash of storage for nodes, keyed off `nodeIdProperty`
+
+var uniqueId = function(node) {
+	var nodeId = node[nodeIdProperty];
+	if (nodeId) return nodeId;
+	nodeId = nodeCount++; // TODO stringify??
+	node[nodeIdProperty] = new String(nodeId); // NOTE so that node cloning in old IE doesn't copy the node ID property
+	return nodeId;
+}
+
+var setData = function(node, data) { // FIXME assert node is element
+	var nodeId = uniqueId(node);
+	nodeStorage[nodeId] = data;
+}
+
+var hasData = function(node) {
+	var nodeId = node[nodeIdProperty];
+	return !nodeId ? false : nodeId in nodeStorage;
+}
+
+var getData = function(node) { // TODO should this throw if no data?
+	var nodeId = node[nodeIdProperty];
+	if (!nodeId) return;
+	return nodeStorage[nodeId];
+}
+
+
+function getItems(rootNode, type) {
+	if (!hasData(rootNode)) parse(rootNode);
+
+	var scope = getData(rootNode);
+	var typeList = 
+		(typeof type === 'string') ? _.words(type.trim()) :
+		type && type.length ? type :
+		[];
+			
+	var resultList = [];
+
+	_.forEach(scope.properties.names, function(propName) {
+		var propList = scope.properties.namedItem(propName);
+		_.forEach(propList, function(prop) {
+			if (prop.isScope) [].push.apply(resultList, getItems(prop.element, typeList));
+		});
+	});
+
+	_.forEach(scope.childScopes, function(scope) {
+		if (!typeList.length || intersects(scope.type, typeList)) resultList.push(scope);
+		[].push.apply(resultList, getItems(scope.element, typeList));
+	});
+
+	// now convert descriptors back to nodes
+	_.forEach(resultList, function(desc, i) {
+		resultList[i] = desc.element;
+	});
+	return resultList;
+}
+
+function getProperties(el) {
+	if (!hasData(el)) return;
+	var desc = getData(el);
+	if (!desc.isScope) return;
+	return desc.properties;
+}
+
+function parse(rootNode) {
+	if (!rootNode) rootNode = document;
+	var desc = getScopeDesc(rootNode);
+}
+
+function getScopeDesc(scopeEl) {
+	if (hasData(scopeEl)) return getData(scopeEl);
+	
+	var scopeDesc = {
+		element: scopeEl,
+		isScope: true,
+		type: scopeEl.nodeType === 1 || _.words(scopeEl.getAttribute('itemtype')),
+		properties: createHTMLPropertiesCollection(),
+		childScopes: []
+	}
+
+	walkTree(scopeEl, true, function(el) {
+		var isScope = el.hasAttribute('itemscope');
+		var propName = el.getAttribute('itemprop');
+		if (!(isScope || propName)) return NodeFilter.FILTER_SKIP;
+		
+		var item = isScope ? getScopeDesc(el) : getPropDesc(el);
+		if (propName) scopeDesc.properties.addNamedItem(propName, el);
+		else scopeDesc.childScopes.push(el);
+
+		return isScope ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+	});
+
+	setData(scopeEl, scopeDesc);
+	return scopeDesc;
+}
+	
+function getValue(el) {
+	if (hasData(el)) return getData(el).value;
+	var desc = getPropDesc(el);
+	setData(el, desc);
+	return desc.value;
+}
+
+function getPropDesc(el) {
+	if (hasData(el)) return getData(el);
+
+	var name = el.getAttribute('itemprop');
+	
+	var prop = {
+		name: name,
+		value: evaluate(el)
+	}
+	
+	setData(el, prop);
+	return prop;
+}
+
+function evaluate(el) {
+	var tagName = el.tagName.toLowerCase();
+	var attrName = valueAttr[tagName];
+	if (attrName) return el[attrName] || el.getAttribute(attrName);
+
+	return el;
+}
+
+function createHTMLPropertiesCollection() {
+	var list = [];
+	list.names = [];
+	list.nodeLists = {};
+	_.assign(list, HTMLPropertiesCollection.prototype);
+	return list;
+}
+
+var HTMLPropertiesCollection = function() {}
+_.assign(HTMLPropertiesCollection.prototype, {
+
+namedItem: function(name) {
+	return this.nodeLists[name];
+},
+
+addNamedItem: function(name, el) {
+	this.push(el);
+	if (!this.nodeLists[name]) {
+		this.nodeLists[name] = [];
+		this.names.push(name);
+	}
+	this.nodeLists[name].push(el);
+}
+
+});
+
+
+var valueAttr = {};
+_.forEach(_.words("meta@content link@href a@href area@href img@src video@src audio@src source@src track@src iframe@src embed@src object@data time@datetime data@value meter@value"), function(text) {
+	var m = text.split("@"), tagName = m[0], attrName = m[1];
+	valueAttr[tagName] = attrName;
+});
+
+
+return {
+
+getItems: getItems,
+getProperties: getProperties,
+getValue: getValue
+
+}
+
+})();
+
+
+function MicrodataDecoder(options, namespaces) {}
+
+_.defaults(MicrodataDecoder.prototype, {
+
+init: function(node) {
+	Microdata.getItems(node);
+	this.rootNode = node;
+},
+
+evaluate: function(query, context, variables, wantArray) {
+	if (!context) context = this.rootNode;
+
+	var query = query.trim();
+	var startAtRoot = false;
+	var baseSchema;
+	var pathParts;
+
+	if (query === '.') return (wantArray) ? [ context ] : context;
+
+	var m = query.match(/^(?:(\^)?\[([^\]]*)\]\.)/);
+	if (m && m.length) {
+		query = query.substr(m[0].length);
+		startAtRoot = !!m[1];
+		baseSchema = _.words(m[2].trim());
+	}
+	pathParts = _.words(query.trim());
+	
+	var nodes;
+	if (baseSchema) {
+		if (startAtRoot) context = this.view;
+		nodes = Microdata.getItems(context, baseSchema);	
+	}
+	else nodes = [ context ];
+
+	var resultList = nodes;
+	_.forEach(pathParts, function(relPath, i) {
+		var parents = resultList;
+		resultList = [];
+		_.forEach(parents, function(el) {
+			var props = Microdata.getProperties(el);
+			if (!props) return;
+			var nodeList = props.namedItem(relPath);
+			if (!nodeList) return;
+			[].push.apply(resultList, nodeList);
+		});
+	});
+
+	// now convert elements to values
+	resultList = _.map(resultList, function(el) {
+		var props = Microdata.getProperties(el);
+		if (props) return el;
+		return Microdata.getValue(el);
+	});
+
+	if (wantArray) return resultList;
+
+	return resultList[0];
+}
+
+});
+
+
+_.assign(classnamespace, {
+
+Microdata: Microdata,
+MicrodataDecoder: MicrodataDecoder
+
+});
+
+
+}).call(this, this.Meeko);
+(function(classnamespace) {
+
+var global = this;
+
+var Meeko = global.Meeko;
+var _ = Meeko.stuff;
+var DOM = Meeko.DOM;
+var decoders = Meeko.decoders;
+
+// FIXME not really a JSON decoder since expects JSON input and 
+// doesn't use JSON paths
+
+function JSONDecoder(options, namespaces) {}
+
+_.defaults(JSONDecoder.prototype, {
+
+init: function(object) {
+	if (typeof object !== 'object' || object === null) throw 'JSONDecoder cannot handle non-object';
+	this.object = object;
+},
+
+evaluate: function(query, context, variables, wantArray) {
+	if (!context) context = this.object;
+
+	var query = query.trim();
+	var pathParts;
+
+	if (query === '.') return (wantArray) ? [ context ] : context;
+
+	var m = query.match(/^\^/);
+	if (m && m.length) {
+		query = query.substr(m[0].length);
+		context = this.object;
+	}
+	pathParts = query.split('.');
+	
+	var resultList = [ context ];
+	_.forEach(pathParts, function(relPath, i) {
+		var parents = resultList;
+		resultList = [];
+		_.forEach(parents, function(item) {
+			var child = item[relPath];
+			if (child != null) {
+				if (Array.isArray(child)) [].push.apply(resultList, child);
+				else resultList.push(child);
+			}
+		});
+	});
+
+	if (wantArray) return resultList;
+
+	var value = resultList[0];
+	return value;
+}
+
+});
+
+
+_.assign(classnamespace, {
+
+JSONDecoder: JSONDecoder
+
+});
+
+
+}).call(this, this.Meeko);
+(function(classnamespace) {
+
+var global = this;
+
+var Meeko = global.Meeko;
+var decoders = Meeko.decoders;
+
+var CSSDecoder = Meeko.CSSDecoder;
+decoders.register('css', CSSDecoder);
+
+var MicrodataDecoder = Meeko.MicrodataDecoder;
+decoders.register('microdata', MicrodataDecoder);
+
+var JSONDecoder = Meeko.JSONDecoder;
+decoders.register('json', JSONDecoder);
+
+}).call(this, this.Meeko);
+/*!
+ * HyperFrameset Processors
+ * Copyright 2014-2015 Sean Hogan (http://meekostuff.net/)
+ * Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
+ */
+
+(function(classnamespace) {
+
+var global = this;
+var Meeko = global.Meeko;
+var _ = Meeko.stuff;
+var Registry = Meeko.Registry;
+
+var processors = new Registry({
+	writeOnce: true,
+	testKey: function(key) {
+		return typeof key === 'string' && /^[_a-zA-Z][_a-zA-Z0-9]*/.test(key);
+	},
+	testValue: function(constructor) {
+		return typeof constructor === 'function';
+	}
+});
+
+_.assign(processors, {
+
+create: function(type, options, namespaces) {
+	var constructor = this.get(type);
+	return new constructor(options, namespaces);
+}
+
+});
+
+classnamespace.processors = processors;
+
+}).call(this, this.Meeko);
+/*!
+ * MainProcessor
+ * Copyright 2014-2016 Sean Hogan (http://meekostuff.net/)
+ * Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
+ */
+
+(function(classnamespace) {
+
+var global = this;
+
+var Meeko = global.Meeko;
+var _ = Meeko.stuff;
+var DOM = Meeko.DOM;
+var processors = Meeko.processors;
+
+function MainProcessor(options) {}
+
+_.defaults(MainProcessor.prototype, {
+
+loadTemplate: function(template) {
+	if (/\S+/.test(template.textContent)) console.warn('"main" transforms do not use templates');
+},
+
+transform: function(provider, details) { // TODO how to use details?
+	var srcNode = provider.srcNode;
+	var srcDoc = srcNode.nodeType === 9 ? srcNode : srcNode.ownerDocument;
+	var main;
+	if (!main) main = DOM.find('main, [role=main]', srcNode);
+	if (!main && srcNode === srcDoc) main = srcDoc.body;
+	if (!main) main = srcNode;
+
+	var frag = srcDoc.createDocumentFragment();
+	var node;
+	while (node = main.firstChild) frag.appendChild(node); // NOTE no adoption
+	return frag;
+}
+	
+});
+
+_.assign(classnamespace, {
+
+MainProcessor: MainProcessor
+
+});
+
+
+}).call(this, this.Meeko);
+/*!
+ * ScriptProcessor
+ * Copyright 2014-2016 Sean Hogan (http://meekostuff.net/)
+ * Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
+ */
+
+(function(classnamespace) {
+
+var global = this;
+
+var Meeko = global.Meeko;
+var _ = Meeko.stuff;
+var DOM = Meeko.DOM;
+var Task = Meeko.Task;
+var processors = Meeko.processors;
+
+function ScriptProcessor(options) {
+	this.processor = options;
+}
+
+_.defaults(ScriptProcessor.prototype, {
+
+loadTemplate: function(template) {
+	var script;
+	_.forEach(_.map(template.childNodes), function(node) {
+		switch (node.nodeType) {
+		case 1: // Element
+			switch (DOM.getTagName(node)) {
+			case 'script':
+				if (script) console.warn('Ignoring secondary <script> in "script" transform template');
+				else script = node;
+				return;
+			default:
+				console.warn('Ignoring unexpected non-<script> element in "script" transform template');
+				return;
+			}
+			break; // should never reach here
+		case 3: // Text
+			if (/\S+/.test(node.nodeValue)) console.warn('"script" transforms should not have non-empty text-nodes');
+			return;
+		case 8: // Comment
+			return;
+		default:
+			console.warn('Unexpected node in "script" transform template');
+			return;
+		}
+	});
+	if (!script) {
+		// no problem if already a processor defined in new ScriptProcessor(options)
+		if (this.processor) return;
+		console.warn('No <script> found in "script" transform template');
+		return;
+	}
+	try { this.processor = (Function('return (' + script.text + ')'))(); }
+	catch(err) { Task.postError(err); }
+	
+	if (!this.processor || !this.processor.transform) {
+		console.warn('"script" transform template did not produce valid transform object');
+		return;
+	}
+},
+
+transform: function(provider, details) {
+	var srcNode = provider.srcNode;
+	if (!this.processor || !this.processor.transform) {
+		console.warn('"script" transform template did not produce valid transform object');
+		return;
+	}
+	return this.processor.transform(srcNode, details);
+}
+	
+});
+
+
+_.assign(classnamespace, {
+
+ScriptProcessor: ScriptProcessor
+
+});
+
+
+}).call(this, this.Meeko);
+/*!
+ * HazardProcessor
+ * Copyright 2014-2016 Sean Hogan (http://meekostuff.net/)
+ * Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
+ */
+
+/* NOTE
+	+ assumes DOMSprockets
+*/
+/* TODO
+    + The passing of nodes between documents needs to be audited.
+		Safari and IE10,11 in particular seem to require nodes to be imported / adopted
+		(not fully understood right now)
+ */
+
+(function(classnamespace) {
+
+var window = this;
+var document = window.document;
+
+var Meeko = window.Meeko;
+var _ = Meeko.stuff;
+var DOM = Meeko.DOM;
+var Task = Meeko.Task;
+var Promise = Meeko.Promise;
+var filters = Meeko.filters;
+var processors = Meeko.processors;
+var CustomNamespace = Meeko.CustomNamespace;
+
+// NOTE textAttr & htmlAttr used in HazardProcessor & CSSDecoder
+var textAttr = '_text';
+var htmlAttr = '_html';
+
+var PIPE_OPERATOR = '//>';
+
+var HYPERFRAMESET_URN = 'hyperframeset'; // FIXME DRY with libHyperFrameset.js
+
+/* WARN 
+	on IE11 and Edge, certain elements (or attrs) *not* attached to a document 
+	can trash the layout engine. Examples:
+		- <custom-element>
+		- <element style="...">
+		- <li value="NaN">
+*/
+var FRAGMENTS_ARE_INERT = !(window.HTMLUnknownElement && 
+	'runtimeStyle' in window.HTMLUnknownElement.prototype);
+// NOTE actually IE10 is okay, but no reasonable feature detection has been determined
+
+var HAZARD_TRANSFORM_URN = 'HazardTransform';
+var hazDefaultNS = new CustomNamespace({
+	urn: HAZARD_TRANSFORM_URN,
+	name: 'haz',
+	style: 'xml'
+});
+var HAZARD_EXPRESSION_URN = 'HazardExpression';
+var exprDefaultNS = new CustomNamespace({
+	urn: HAZARD_EXPRESSION_URN,
+	name: 'expr',
+	style: 'xml'
+});
+var HAZARD_MEXPRESSION_URN = 'HazardMExpression';
+var mexprDefaultNS = new CustomNamespace({
+	urn: HAZARD_MEXPRESSION_URN,
+	name: 'mexpr',
+	style: 'xml'
+});
+
+/* 
+ NOTE IE11 / Edge has a bad performance regression with DOM fragments 
+ containing certain elements / attrs, see
+     https://connect.microsoft.com/IE/feedback/details/1776195/ie11-edge-performance-regression-with-dom-fragments
+*/
+var PERFORMANCE_UNFRIENDLY_CONDITIONS = [
+	{
+		tag: '*', // must be present for checkElementPerformance()
+		attr: 'style',
+		description: 'an element with @style'
+	},
+	{
+		tag: 'li',
+		attr: 'value',
+		description: 'a <li> element with @value'
+	},
+	{
+		tag: undefined,
+		description: 'an unknown or custom element'
+	}
+];
+
+function checkElementPerformance(el, namespaces) {
+	var exprPrefix = namespaces.lookupPrefix(HAZARD_EXPRESSION_URN);
+	var mexprPrefix = namespaces.lookupPrefix(HAZARD_MEXPRESSION_URN);
+
+	var outerHTML;
+	_.forEach(PERFORMANCE_UNFRIENDLY_CONDITIONS, function(cond) {
+		switch (cond.tag) {
+		case undefined: case null:
+			if (el.toString() !== '[object HTMLUnknownElement]') return;
+			break;
+		default:
+			if (DOM.getTagName(el) !== cond.tag) return;
+			// fall-thru
+		case '*': case '':
+			if (_.every(
+				['', exprPrefix, mexprPrefix], function(prefix) {
+					var attr = prefix + cond.attr;
+					return !el.hasAttribute(attr);
+				})
+			) return;
+			break;
+		}
+		if (!outerHTML) outerHTML = el.cloneNode(false).outerHTML; // FIXME caniuse outerHTML??
+		console.debug('Found ' + cond.description + ':\n\t\t' + outerHTML + '\n\t' +
+			'This can cause poor performance on IE / Edge.');
+	});
+}
+
+/*
+ - items in hazLangDefinition are element@list-of-attrs
+ - if element is prefixed with '<' or '>' then it can be defined 
+    as an attribute on a normal HTML element. 
+ - in preprocessing the attr is promoted to an element
+    either above or below the HTML element. 
+ - the attr value is used as the "default" attr of the created element. 
+    The "default" attr is the first attr-name in the list-of-attrs.  
+ - the order of items in hazLangDefinition is the order of promoting 
+    attrs to elements.
+*/
+var hazLangDefinition = 
+	'<otherwise <when@test <each@select <one@select +var@name,select <if@test <unless@test ' +
+	'>choose <template@name,match >eval@select >mtext@select >text@select ' +
+	'call@name apply param@name,select clone deepclone element@name attr@name';
+
+var hazLang = _.map(_.words(hazLangDefinition), function(def) {
+	def = def.split('@');
+	var tag = def[0];
+	var attrToElement = tag.charAt(0);
+	switch (attrToElement) {
+	default: 
+		attrToElement = false; 
+		break;
+	case '<': case '>': case '+':
+		break;
+	}
+	if (attrToElement) tag = tag.substr(1);
+	var attrs = def[1];
+	attrs = (attrs && attrs !== '') ? attrs.split(',') : [];
+	return {
+		tag: tag,
+		attrToElement: attrToElement,
+		attrs: attrs
+	}
+});
+
+var hazLangLookup = {};
+
+_.forEach(hazLang, function(directive) {
+	var tag = directive.tag; 
+	hazLangLookup[tag] = directive;
+});
+
+function walkTree(root, skipRoot, callback) { // always "accept" element nodes
+	var walker = document.createNodeIterator(
+			root,
+			1,
+			acceptNode,
+			null // IE9 throws if this irrelavent argument isn't passed
+		);
+	
+	var el;
+	while (el = walker.nextNode()) callback(el);
+
+	function acceptNode(el) {
+		if (skipRoot && el === root) return NodeFilter.FILTER_SKIP;
+		return NodeFilter.FILTER_ACCEPT;
+	}
+}
+
+function childNodesToFragment(el) {
+	var doc = el.ownerDocument;
+	var frag = doc.createDocumentFragment();
+	_.forEach(_.map(el.childNodes), function(child) { frag.appendChild(child); });
+	return frag;
+}
+
+function htmlToFragment(html, doc) {
+	if (!doc) doc = document;
+	var div = doc.createElement('div');
+	div.innerHTML = html;
+	var result = childNodesToFragment(div);
+	return result;
+}
+
+function HazardProcessor(options, namespaces) {
+	this.templates = [];
+	this.namespaces = namespaces = namespaces.clone();
+	if (!namespaces.lookupNamespace(HAZARD_TRANSFORM_URN))
+		namespaces.add(hazDefaultNS);
+	if (!namespaces.lookupNamespace(HAZARD_EXPRESSION_URN))
+		namespaces.add(exprDefaultNS);
+	if (!namespaces.lookupNamespace(HAZARD_MEXPRESSION_URN))
+		namespaces.add(mexprDefaultNS);
+}
+
+_.defaults(HazardProcessor.prototype, {
+	
+loadTemplate: function(template) {
+	var processor = this;
+	processor.root = template; // FIXME assert template is Fragment
+	processor.templates = [];
+
+	var namespaces = processor.namespaces;
+	var hazPrefix = namespaces.lookupPrefix(HAZARD_TRANSFORM_URN);
+	var exprPrefix = namespaces.lookupPrefix(HAZARD_EXPRESSION_URN);
+	var mexprPrefix = namespaces.lookupPrefix(HAZARD_MEXPRESSION_URN);
+
+	var exprHtmlAttr = exprPrefix + htmlAttr; // NOTE this is mapped to haz:eval
+	var hazEvalTag = hazPrefix + 'eval';
+	var mexprHtmlAttr = mexprPrefix + htmlAttr; // NOTE this is invalid
+
+	var mexprTextAttr = mexprPrefix + textAttr; // NOTE this is mapped to haz:mtext
+	var hazMTextTag = hazPrefix + 'mtext';
+	var exprTextAttr = exprPrefix + textAttr; // NOTE this is mapped to haz:text
+	var hazTextTag = hazPrefix + 'text';
+
+	// FIXME extract exprToHazPriority from hazLang
+	var exprToHazPriority = [ exprHtmlAttr, mexprTextAttr, exprTextAttr ];
+	var exprToHazMap = {};
+	exprToHazMap[exprHtmlAttr] = hazEvalTag;
+	exprToHazMap[mexprTextAttr] = hazMTextTag;
+	exprToHazMap[exprTextAttr] = hazTextTag;
+
+	var doc = template.ownerDocument;
+
+	// rewrite the template if necessary
+	walkTree(template, true, function(el) {
+		var tag = DOM.getTagName(el);
+		if (tag.indexOf(hazPrefix) === 0) return;
+
+		// pre-process @expr:_html -> @haz:eval, etc
+		_.forEach(exprToHazPriority, function(attr) {
+			if (!el.hasAttribute(attr)) return;
+			var tag = exprToHazMap[attr];
+			var val = el.getAttribute(attr);
+			el.removeAttribute(attr);
+			el.setAttribute(tag, val);
+		});
+
+		if (el.hasAttribute(mexprHtmlAttr)) {
+			console.warn('Removing unsupported @' + mexprHtmlAttr);
+			el.removeAttribute(mexprHtmlAttr);
+		}
+
+		// promote applicable hazard attrs to elements
+		_.forEach(hazLang, function(def) {
+			if (!def.attrToElement) return;
+			var nsTag = hazPrefix + def.tag;
+			if (!el.hasAttribute(nsTag)) return;
+
+			// create <haz:element> ...
+			var directiveEl = doc.createElement(nsTag);
+			// with default attr set from @haz:attr on original element
+			var defaultAttr = def.attrs[0];
+			var value = el.getAttribute(nsTag);
+			el.removeAttribute(nsTag);
+			if (defaultAttr) directiveEl.setAttribute(defaultAttr, value);
+
+			// copy non-default hazard attrs
+			_.forEach(def.attrs, function(attr, i) {
+				if (i === 0) return; // the defaultAttr
+				var nsAttr = hazPrefix + attr;
+				if (!el.hasAttribute(nsAttr)) return;
+				var value = el.getAttribute(nsAttr);
+				el.removeAttribute(nsAttr);
+				directiveEl.setAttribute(attr, value);
+			});
+			// insert the hazard element goes below or above the current element
+			switch (def.attrToElement) {
+			case '>':
+				var frag = childNodesToFragment(el);
+				directiveEl.appendChild(frag);
+				el.appendChild(directiveEl);
+				break;
+			case '<':
+				el.parentNode.replaceChild(directiveEl, el);
+				directiveEl.appendChild(el);
+				break;
+			case '+':
+				el.parentNode.insertBefore(directiveEl, el);
+				break;
+			default:
+				break;
+			}
+		});
+	});
+	
+	walkTree(template, true, function(el) {
+		var tag = DOM.getTagName(el);
+		if (tag === hazPrefix + 'template') markTemplate(el);
+		if (tag === hazPrefix + 'choose') implyOtherwise(el);
+	});
+
+	implyEntryTemplate(template);
+
+	// finally, preprocess all elements to extract hazardDetails
+	walkTree(template, true, function(el) {
+		el.hazardDetails = getHazardDetails(el, processor.namespaces);
+	});
+	
+	if (console.logLevel !== 'debug') return;
+
+	// if debugging then warn about PERFORMANCE_UNFRIENDLY_CONDITIONS (IE11 / Edge)
+	var hfNS = processor.namespaces.lookupNamespace(HYPERFRAMESET_URN);
+	walkTree(template, true, function(el) {
+		var tag = DOM.getTagName(el);
+		if (tag.indexOf(hazPrefix) === 0) return;
+		if (tag.indexOf(hfNS.prefix) === 0) return; // HyperFrameset element
+		checkElementPerformance(el, namespaces);
+	});
+
+
+	function implyOtherwise(el) { // NOTE this slurps *any* non-<haz:when>, including <haz:otherwise>
+		var otherwise = el.ownerDocument.createElement(hazPrefix + 'otherwise');
+		_.forEach(_.map(el.childNodes), function(node) {
+			var tag = DOM.getTagName(node);
+			if (tag === hazPrefix + 'when') return;
+			otherwise.appendChild(node);
+		});
+		el.appendChild(otherwise);
+	}
+
+	function markTemplate(el) {
+		processor.templates.push(el);
+	}
+
+	function implyEntryTemplate(el) { // NOTE this slurps *any* non-<haz:template>
+		var firstExplicitTemplate;
+		var contentNodes = _.filter(el.childNodes, function(node) {
+			var tag = DOM.getTagName(node);
+			if (tag === hazPrefix + 'template') {
+				if (!firstExplicitTemplate) firstExplicitTemplate = node;
+				return false;
+			}
+			if (tag === hazPrefix + 'var') return false;
+			if (tag === hazPrefix + 'param') return false;
+			if (node.nodeType === 3 && !(/\S/).test(node.nodeValue)) return false;
+			if (node.nodeType !== 1) return false;
+			return true;
+		});
+
+		if (contentNodes.length <= 0) {
+			if (firstExplicitTemplate) return;
+			console.warn('This Hazard Template cannot generate any content.');
+		}
+		var entryTemplate = el.ownerDocument.createElement(hazPrefix + 'template');
+		_.forEach(contentNodes, function(node) {
+			entryTemplate.appendChild(node);
+		});
+		el.insertBefore(entryTemplate, firstExplicitTemplate);
+		processor.templates.unshift(entryTemplate);
+	}
+
+},
+
+getEntryTemplate: function() {
+	return this.templates[0];
+},
+
+getNamedTemplate: function(name) {
+	var processor = this;
+	name = _.lc(name);
+	return _.find(processor.templates, function(template) {
+		return _.lc(template.getAttribute('name')) === name;
+	});
+},
+
+getMatchingTemplate: function(element) {
+	var processor = this;
+	return _.find(processor.templates, function(template) {
+		if (!template.hasAttribute('match')) return false;
+		var expression = template.getAttribute('match');
+		return processor.provider.matches(element, expression);
+	});	
+},
+
+transform: FRAGMENTS_ARE_INERT ?
+function(provider, details) { // TODO how to use details
+	var processor = this;
+	var root = processor.root;
+	var doc = root.ownerDocument;
+	var frag = doc.createDocumentFragment();
+	return processor._transform(provider, details, frag)
+	.then(function() {
+		return frag;
+	});
+} :
+
+// NOTE IE11, Edge needs a different transform() because fragments are not inert
+function(provider, details) {
+	var processor = this;
+	var root = processor.root;
+	var doc = DOM.createHTMLDocument('', root.ownerDocument);
+	var frag = doc.body; // WARN don't know why `doc.body` is inert but fragments aren't
+	return processor._transform(provider, details, frag)
+	.then(function() {
+		frag = childNodesToFragment(frag);
+		return frag;
+	});
+},
+
+_transform: function(provider, details, frag) {
+	var processor = this;
+	processor.provider = provider;
+
+	processor.globalParams = _.assign({}, details);
+	processor.globalVars = {};
+	processor.localParams = processor.globalParams;
+	processor.localVars = processor.globalVars;
+	processor.localParamsStack = [];
+	processor.localVarsStack = [];
+
+	processor.variables = {
+		has: function(key) {
+			var result = 
+				key in processor.localVars ||
+				key in processor.localParams ||
+				key in processor.globalVars ||
+				key in processor.globalParams ||
+				false;
+			return result;
+		},
+		get: function(key) {
+			var result = 
+				key in processor.localVars && processor.localVars[key] ||
+				key in processor.localParams && processor.localParams[key] ||
+				key in processor.globalVars && processor.globalVars[key] ||
+				key in processor.globalParams && processor.globalParams[key] ||
+				undefined;
+			return result;
+		},
+		set: function(key, value, inParams, isGlobal) {
+			var mapName = isGlobal ?
+				( inParams ? 'globalParams' : 'globalVars' ) :
+				( inParams ? 'localParams' : 'localVars' );
+			// NOTE params are write-once
+			if (mapName === 'localParams' && key in processor.localParams) return;
+			if (mapName === 'globalParams' && key in processor.globalParams) return;
+			processor[mapName][key] = value;
+		},
+		push: function(params) {
+			processor.localParamsStack.push(processor.localParams);
+			processor.localVarsStack.push(processor.localVars);
+
+			if (typeof params !== 'object' || params == null) params = {};
+			processor.localParams = params;
+			processor.localVars = {};
+		},
+		pop: function() {
+			processor.localParams = processor.localParamsStack.pop();		
+			processor.localVars = processor.localVarsStack.pop();		
+		}
+	}
+
+	return processor.transformChildNodes(processor.root, null, frag)
+	.then(function() {
+		var template = processor.getEntryTemplate();
+		return processor.transformTemplate(template, null, null, frag);
+	});
+},
+
+transformTemplate: function(template, context, params, frag) {
+	var processor = this;
+	processor.variables.push(params);
+
+	return processor.transformChildNodes(template, context, frag)
+	.then(function() { 
+		processor.variables.pop(); 
+		return frag;
+	});
+},
+
+transformChildNodes: function(srcNode, context, frag) {
+	var processor = this;
+
+	return Promise.reduce(null, srcNode.childNodes, function(dummy, current) {
+		return processor.transformNode(current, context, frag);
+	});
+},
+
+transformNode: function(srcNode, context, frag) {
+	var processor = this;
+
+	switch (srcNode.nodeType) {
+	default: 
+		var node = srcNode.cloneNode(true);
+		frag.appendChild(node);
+		return;
+	case 3: // NOTE text-nodes are special-cased for perf testing
+		var node = srcNode.cloneNode(true);
+		frag.appendChild(node);
+		return;
+	case 1:
+		var details = srcNode.hazardDetails;
+		if (details.definition) return processor.transformHazardTree(srcNode, context, frag);
+		else return processor.transformTree(srcNode, context, frag);
+	}
+},
+
+transformHazardTree: function(el, context, frag) {
+	var processor = this;
+	var doc = el.ownerDocument;
+
+	var details = el.hazardDetails;
+	var def = details.definition;
+
+	var invertTest = false; // for haz:if haz:unless
+
+	switch (def.tag) {
+	default: // for unknown (or unhandled) haz: elements just process the children
+		return processor.transformChildNodes(el, context, frag); 
+		
+	case 'template':
+		return frag;
+
+	case 'var':
+		var name = el.getAttribute('name');
+		var selector = el.getAttribute('select');
+		var value = context;
+		if (selector) {
+			try {
+				value = processor.provider.evaluate(selector, context, processor.variables, false);
+			}
+			catch (err) {
+				Task.postError(err);
+				console.warn('Error evaluating <haz:var name="' + name + '" select="' + selector + '">. Assumed empty.');
+				value = undefined;
+			}
+		}
+
+		processor.variables.set(name, value);
+		return frag;
+
+	case 'param':
+		var name = el.getAttribute('name');
+		var selector = el.getAttribute('select');
+		var value = context;
+		if (selector) {
+			try {
+				value = processor.provider.evaluate(selector, context, processor.variables, false);
+			}
+			catch (err) {
+				Task.postError(err);
+				console.warn('Error evaluating <haz:param name="' + name + '" select="' + selector + '">. Assumed empty.');
+				value = undefined;
+			}
+		}
+
+		processor.variables.set(name, value, true);
+		return frag;
+
+
+	case 'call':
+		// FIXME attributes should already be in hazardDetails
+		var name = el.getAttribute('name');
+		var template = processor.getNamedTemplate(name);
+		if (!template) {
+			console.warn('Hazard could not find template name=' + name);
+			return frag;
+		}
+	
+		return processor.transformTemplate(template, context, null, frag); 
+
+	case 'apply': // WARN only applies to DOM-based provider
+		var template = processor.getMatchingTemplate(context);
+		var promise = Promise.resolve(el);
+		if (template) {
+			return processor.transformTemplate(template, context, null, frag);
+		}
+		var node = context.cloneNode(false);
+		frag.appendChild(node);
+		return Promise.reduce(null, context.childNodes, function(dummy, child) {
+			return processor.transformHazardTree(el, child, node);
+		});
+
+	case 'clone': // WARN only applies to DOM-based providers
+		var node = context.cloneNode(false);
+		frag.appendChild(node);
+		return processor.transformChildNodes(el, context, node);
+
+	case 'deepclone': // WARN only applies to DOM-based providers
+		var node = context.cloneNode(true);
+		frag.appendChild(node);
+		// TODO WARN if el has child-nodes
+		return frag;
+
+	case 'element':
+		// FIXME attributes should already be in hazardDetails
+		// FIXME log a warning if this directive has children
+		var mexpr = el.getAttribute('name');
+		var name = evalMExpression(mexpr, processor.provider, context, processor.variables);
+		var type = typeof value;
+		if (type !== 'string') return frag;
+
+		var node = doc.createElement(name);
+		frag.appendChild(node);
+		return processor.transformChildNodes(el, context, node);
+
+	case 'attr':
+		// FIXME attributes should already be in hazardDetails
+		// FIXME log a warning if this directive has children
+		var mexpr = el.getAttribute('name');
+		var name = evalMExpression(mexpr, processor.provider, context, processor.variables);
+		var type = typeof value;
+		if (type !== 'string') return frag;
+
+		var node = doc.createDocumentFragment();
+		return processor.transformChildNodes(el, context, node)
+		.then(function() {
+			value = node.textContent;
+			frag.setAttribute(name, value);
+			return frag;
+		});
+
+	case 'eval':
+		// FIXME attributes should already be in hazardDetails
+		// FIXME log a warning if this directive has children
+		var selector = el.getAttribute('select');
+		var value = evalExpression(selector, processor.provider, context, processor.variables, 'node');
+		var type = typeof value;
+		if (type === 'undefined' || type === 'boolean' || value == null) return frag;
+		if (!value.nodeType) { // TODO test performance
+			value = htmlToFragment(value, doc);
+		}
+		frag.appendChild(value);
+		return frag;
+
+	case 'mtext':
+		// FIXME attributes should already be in hazardDetails
+		// FIXME log a warning if this directive has children
+		var mexpr = el.getAttribute('select');
+		var value = evalMExpression(mexpr, processor.provider, context, processor.variables);
+		// FIXME `value` should always already be "text"
+		if (type === 'undefined' || type === 'boolean' || value == null) return frag;
+		if (!value.nodeType) {
+			value = doc.createTextNode(value);
+		}
+		frag.appendChild(value);
+		return frag;
+
+	case 'text':
+		// FIXME attributes should already be in hazardDetails
+		// FIXME log a warning if this directive has children
+		var expr = el.getAttribute('select');
+		var value = evalExpression(expr, processor.provider, context, processor.variables, 'text');
+		// FIXME `value` should always already be "text"
+		var type = typeof value;
+		if (type === 'undefined' || type === 'boolean' || value == null) return frag;
+		if (!value.nodeType) {
+			value = doc.createTextNode(value);
+		}
+		frag.appendChild(value);
+		return frag;
+
+	case 'unless':
+		invertTest = true;
+	case 'if':
+		// FIXME attributes should already be in hazardDetails
+		var testVal = el.getAttribute('test');
+		var pass = false;
+		try {
+			pass = evalExpression(testVal, processor.provider, context, processor.variables, 'boolean');
+		}
+		catch (err) {
+			Task.postError(err);
+			console.warn('Error evaluating <haz:if test="' + testVal + '">. Assumed false.');
+			pass = false;
+		}
+		if (invertTest) pass = !pass;
+		if (!pass) return frag;
+		return processor.transformChildNodes(el, context, frag); 
+
+	case 'choose':
+		// FIXME attributes should already be in hazardDetails
+ 		// NOTE if no successful `when` then chooses *first* `otherwise` 		
+		var otherwise;
+		var when;
+		var found = _.some(el.childNodes, function(child) { // TODO .children??
+			if (child.nodeType !== 1) return false;
+			var childDef = child.hazardDetails.definition;
+			if (!childDef) return false;
+			if (childDef.tag === 'otherwise') {
+				if (!otherwise) otherwise = child;
+				return false;
+			}
+			if (childDef.tag !== 'when') return false;
+			var testVal = child.getAttribute('test');
+			var pass = evalExpression(testVal, processor.provider, context, processor.variables, 'boolean');
+			if (!pass) return false;
+			when = child;
+			return true;
+		});
+		if (!found) when = otherwise;
+		if (!when) return frag;
+		return processor.transformChildNodes(when, context, frag); 
+
+	case 'one': // FIXME refactor common parts with `case 'each':`
+		// FIXME attributes should already be in hazardDetails
+		var selector = el.getAttribute('select');
+		var subContext;
+		try {
+			subContext = processor.provider.evaluate(selector, context, processor.variables, false);
+		}
+		catch (err) {
+			Task.postError(err);
+			console.warn('Error evaluating <haz:one select="' + selector + '">. Assumed empty.');
+			return frag;
+		}
+
+		if (!subContext) return frag;
+		return processor.transformChildNodes(el, subContext, frag);
+
+
+	case 'each':
+		// FIXME attributes should already be in hazardDetails
+		var selector = el.getAttribute('select');
+		var subContexts;
+		try {
+			subContexts = processor.provider.evaluate(selector, context, processor.variables, true);
+		}
+		catch (err) {
+			Task.postError(err);
+			console.warn('Error evaluating <haz:each select="' + selector + '">. Assumed empty.');
+			return frag;
+		}
+
+		return Promise.reduce(null, subContexts, function(dummy, subContext) {
+			return processor.transformChildNodes(el, subContext, frag);
+		});
+
+	}
+			
+},
+
+transformTree: function(srcNode, context, frag) { // srcNode is Element
+	var processor = this;
+	
+	var nodeType = srcNode.nodeType;
+	if (nodeType !== 1) throw Error('transformTree() expects Element');
+	var node = processor.transformSingleElement(srcNode, context);
+	var nodeAsFrag = frag.appendChild(node); // WARN use returned value not `node` ...
+	// ... this allows frag to be a custom object, which in turn 
+	// ... allows a different type of output construction
+
+	return processor.transformChildNodes(srcNode, context, nodeAsFrag);
+},
+
+transformSingleElement: function(srcNode, context) {
+	var processor = this;
+	var details = srcNode.hazardDetails;
+
+	el = srcNode.cloneNode(false);
+
+	_.forEach(details.exprAttributes, function(desc) {
+		var value;
+		try {
+			value = (desc.namespaceURI === HAZARD_MEXPRESSION_URN) ?
+				processMExpression(desc.mexpression, processor.provider, context, processor.variables) :
+				processExpression(desc.expression, processor.provider, context, processor.variables, desc.type);
+		}
+		catch (err) {
+			Task.postError(err);
+			console.warn('Error evaluating @' + desc.attrName + '="' + desc.expression + '". Assumed false.');
+			value = false;
+		}
+		setAttribute(el, desc.attrName, value);
+	});
+
+	return el;
+}
+
+});
+
+function getHazardDetails(el, namespaces) {
+	var details = {};
+	var tag = DOM.getTagName(el);
+	var hazPrefix = namespaces.lookupPrefix(HAZARD_TRANSFORM_URN);
+	var isHazElement = tag.indexOf(hazPrefix) === 0;
+
+	if (isHazElement) { // FIXME preprocess attrs of <haz:*>
+		tag = tag.substr(hazPrefix.length);
+		var def = hazLangLookup[tag];
+		details.definition = def || { tag: '' };
+	}
+
+	details.exprAttributes = getExprAttributes(el, namespaces);
+	return details;
+}
+
+function getExprAttributes(el, namespaces) {
+	var attrs = [];
+	
+	var exprNS = namespaces.lookupNamespace(HAZARD_EXPRESSION_URN);
+	var mexprNS = namespaces.lookupNamespace(HAZARD_MEXPRESSION_URN);
+	_.forEach(_.map(el.attributes), function(attr) {
+		var ns = _.find([ exprNS, mexprNS ], function(ns) {
+			return (attr.name.indexOf(ns.prefix) === 0);
+		});
+		if (!ns) return;
+		var prefix = ns.prefix;
+		var namespaceURI = ns.urn;
+		var attrName = attr.name.substr(prefix.length);
+		el.removeAttribute(attr.name);
+		var desc = {
+			namespaceURI: namespaceURI,
+			prefix: prefix,
+			attrName: attrName,
+			type: 'text'
+		}
+		switch (namespaceURI) {
+		case HAZARD_EXPRESSION_URN:
+			desc.expression = interpretExpression(attr.value);
+			break;
+		case HAZARD_MEXPRESSION_URN:
+			desc.mexpression = interpretMExpression(attr.value);
+			break;
+		default: // TODO an error?
+			break;
+		}
+		attrs.push(desc);
+	});
+	return attrs;
+}
+
+
+function setAttribute(el, attrName, value) {
+	var type = typeof value;
+	if (type === 'undefined' || type === 'boolean' || value == null) {
+		if (!value) el.removeAttribute(attrName);
+		else el.setAttribute(attrName, '');
+	}
+	else {
+		el.setAttribute(attrName, value.toString());
+	}
+}
+
+function evalMExpression(mexprText, provider, context, variables) {
+	var mexpr = interpretMExpression(mexprText);
+	var result = processMExpression(mexpr, provider, context, variables);
+	return result;
+}
+
+function evalExpression(exprText, provider, context, variables, type) {
+	var expr = interpretExpression(exprText);
+	var result = processExpression(expr, provider, context, variables, type);
+	return result;
+}
+	
+function interpretMExpression(mexprText) {
+	var expressions = [];
+	var mexpr = mexprText.replace(/\{\{((?:[^}]|\}(?=\}\})|\}(?!\}))*)\}\}/g, function(all, expr) {
+		expressions.push(expr);
+		return '{{}}';
+	});
+
+	expressions = expressions.map(function(expr) { return interpretExpression(expr); });
+	return {
+		template: mexpr,
+		expressions: expressions
+	};
+}
+
+function interpretExpression(exprText) { // FIXME robustness
+	var expression = {};
+	expression.text = exprText;
+	var exprParts = exprText.split(PIPE_OPERATOR);
+	expression.selector = exprParts.shift();
+	expression.filters = [];
+
+	_.forEach(exprParts, function(filterSpec) {
+		filterSpec = filterSpec.trim();
+		var text = filterSpec;
+		var m = text.match(/^([_a-zA-Z][_a-zA-Z0-9]*)\s*(:?)/);
+		if (!m) {
+			console.warn('Syntax Error in filter call: ' + filterSpec);
+			return false;
+		}
+		var filterName = m[1];
+		var hasParams = m[2];
+		text = text.substr(m[0].length);
+		if (!hasParams && /\S+/.test(text)) {
+			console.warn('Syntax Error in filter call: ' + filterSpec);
+			return false;
+		}
+
+		try {
+			var filterParams = (Function('return [' + text + '];'))();
+		}
+		catch (err) {
+			console.warn('Syntax Error in filter call: ' + filterSpec);
+			return false;
+		}
+
+		expression.filters.push({
+			text: filterSpec,
+			name: filterName,
+			params: filterParams
+		});
+		return true;
+	});
+
+	return expression;
+}
+
+
+function processMExpression(mexpr, provider, context, variables) {
+	var i = 0;
+	return mexpr.template.replace(/\{\{\}\}/g, function(all) {
+		return processExpression(mexpr.expressions[i++], provider, context, variables, 'text');
+	});
+}
+
+function processExpression(expr, provider, context, variables, type) { // FIXME robustness
+	var doc = (context && context.nodeType) ? // TODO which document
+		(context.nodeType === 9 ? context : context.ownerDocument) : 
+		document; 
+	var value = provider.evaluate(expr.selector, context, variables);
+
+	_.every(expr.filters, function(filter) {
+		if (value == null) value = '';
+		if (value.nodeType) {
+			if (value.nodeType === 1) value = value.textContent;
+			else value = '';
+		}
+		try {
+			value = filters.evaluate(filter.name, value, filter.params);
+			return true;
+		}
+		catch (err) {
+			Task.postError(err);
+			console.warn('Failure processing filter call: "' + filter.text + '" with input: "' + value + '"');
+			value = '';
+			return false;
+		}
+	});
+
+	result = cast(value, type);
+	return result;
+
+	function cast(value, type) {
+		switch (type) {
+		case 'text':
+			if (value && value.nodeType) value = value.textContent;
+			break;
+		case 'node':
+			var frag = doc.createDocumentFragment();
+			if (value && value.nodeType) frag.appendChild(doc.importNode(value, true)); // NOTE no adoption
+			else {
+				var div = doc.createElement('div');
+				div.innerHTML = value;
+				var node;
+				while (node = div.firstChild) frag.appendChild(node); // NOTE no adoption
+			}
+			value = frag;
+			break;
+		case 'boolean':
+			if (value == null || value === false) value = false;
+			else value = true;
+			break;
+		default: // FIXME should never occur. console.warn !?
+			if (value && value.nodeType) value = value.textContent;
+			break;
+		}
+		return value;
+	}
+
+
+}
+
+_.assign(classnamespace, {
+
+HazardProcessor: HazardProcessor
+
+});
+
+
+}).call(this, this.Meeko);
+/*!
+ * Builtin Processors
+ * Copyright 2016 Sean Hogan (http://meekostuff.net/)
+ * Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
+ */
+
+(function(classnamespace) {
+
+var global = this;
+
+var Meeko = global.Meeko;
+var processors = Meeko.processors;
+
+var MainProcessor = Meeko.MainProcessor;
+processors.register('main', MainProcessor);
+
+var ScriptProcessor = Meeko.ScriptProcessor;
+processors.register('script', ScriptProcessor);
+
+var HazardProcessor = Meeko.HazardProcessor;
+processors.register('hazard', HazardProcessor);
+
+}).call(this, this.Meeko);
+/*!
+ * HyperFrameset
+ * Copyright 2009-2016 Sean Hogan (http://meekostuff.net/)
+ * Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
+ */
+
+/* NOTE
+	+ assumes DOMSprockets
+*/
+/* TODO
+    + substantial error handling and notification needs to be added
+    + <link rel="self" />
+    + Would be nice if more of the internal functions were called as method, eg DOM.ready()...
+        this would allow the boot-script to modify them as appropriate
+    + Up-front feature testing to prevent boot on unsupportable platorms...
+        e.g. can't create HTML documents
+    + use requestAnimationFrame() when available
+    + The passing of nodes between documents needs to be audited.
+		Safari and IE10,11 in particular seem to require nodes to be imported / adopted
+		(not fully understood right now)
+ */
+
+(function() {
+
+var window = this;
+var document = window.document;
+
+
+if (!window.XMLHttpRequest) throw Error('HyperFrameset requires native XMLHttpRequest');
+
+
+var _ = Meeko.stuff; // provided by DOMSprockets
+
+var Task = Meeko.Task;
+var Promise = Meeko.Promise;
+var URL = Meeko.URL;
+
+/*
+ ### DOM utility functions
+ */
+
+var DOM = Meeko.DOM;
+var htmlParser = Meeko.htmlParser;
+var httpProxy = Meeko.httpProxy;
+var CustomNamespace = Meeko.CustomNamespace;
+var NamespaceCollection = Meeko.NamespaceCollection;
+var scriptQueue = Meeko.scriptQueue;
+
+var historyManager = Meeko.historyManager;
 var sprockets = Meeko.sprockets;
 var controllers = Meeko.controllers;
+var filters = Meeko.filters;
+var decoders = Meeko.decoders;
+var processors = Meeko.processors;
+
+
+/* BEGIN HFrameset code */
 
 var framer = Meeko.framer = (function() {
 
+// FIXME DRY these @rel values with boot.js
 var FRAMESET_REL = 'frameset'; // NOTE http://lists.w3.org/Archives/Public/www-html/1996Dec/0143.html
 var SELF_REL = 'self';
 
 var HYPERFRAMESET_URN = 'hyperframeset';
-var hfDefaultNamespace = {
+var hfDefaultNamespace = new CustomNamespace({
 	name: 'hf',
 	style: 'vendor',
 	urn: HYPERFRAMESET_URN
-}
+});
 
 
 function registerFormElements() {
@@ -3536,8 +5912,8 @@ _.assign(Interface, {
 attached: function(handlers) {
 	var object = this;
 	var element = object.element;
-	if (!element.hasAttribute('configid')) return;
-	var configID = _.words(element.getAttribute('configid'))[0];	
+	if (!element.hasAttribute('config')) return;
+	var configID = _.words(element.getAttribute('config'))[0];	
 	var options = framer.definition.configData[configID];
 	if (!options) return;
 	_.forEach(events, function(type) {
@@ -3565,8 +5941,8 @@ sprockets.registerElement(tag, Interface);
 // NOTE handlers are registered for "body@submit,reset,input,change" in HFrameset
 function registerBodyAsPseudoForm(object, handlers) {
 	var element = object.element;
-	if (!element.hasAttribute('configid')) return;
-	var configID = _.words(element.getAttribute('configid'))[0];	
+	if (!element.hasAttribute('config')) return;
+	var configID = _.words(element.getAttribute('config'))[0];	
 	var options = framer.definition.configData[configID];
 	if (!options) return;
 
@@ -3619,9 +5995,9 @@ var hfHeadTags = _.words('title meta link style script');
 
 var HFrameDefinition = (function() {
 
-function HFrameDefinition(el, frameset) {
+function HFrameDefinition(el, framesetDef) {
 	if (!el) return; // in case of inheritance
-	this.frameset = frameset;
+	this.framesetDefinition = framesetDef;
 	this.init(el);
 }
 
@@ -3629,12 +6005,9 @@ _.defaults(HFrameDefinition.prototype, {
 
 init: function(el) {
     var frameDef = this;
-	var frameset = frameDef.frameset;
-	var hfNS = frameset.namespace;
+	var framesetDef = frameDef.framesetDefinition;
 	_.defaults(frameDef, {
 		element: el,
-		id: el.id,
-		type: el.getAttribute('type'),
 		mainSelector: el.getAttribute('main') // TODO consider using a hash in `@src`
     });
 	var bodies = frameDef.bodies = [];
@@ -3642,12 +6015,12 @@ init: function(el) {
 		var tag = DOM.getTagName(node);
 		if (!tag) return;
 		if (_.includes(hfHeadTags, tag)) return; // ignore typical <head> elements
-		if (tag === hfNS.lookupTagName('body')) {
+		if (tag === framesetDef.namespaces.lookupTagNameNS('body', HYPERFRAMESET_URN)) {
 			el.removeChild(node);
-			bodies.push(new HBodyDefinition(node, frameset));
+			bodies.push(new HBodyDefinition(node, framesetDef));
 			return;
 		}
-		logger.warn('Unexpected element in HFrame: ' + tag);
+		console.warn('Unexpected element in HFrame: ' + tag);
 		return;
 	});
 
@@ -3655,15 +6028,13 @@ init: function(el) {
 },
 
 render: function(resource, condition, details) {
-var frameDef = this;
-	var frameset = frameDef.frameset;
-	var hfNS = frameset.namespace;
+	var frameDef = this;
+	var framesetDef = frameDef.framesetDefinition;
 	if (!details) details = {};
 	_.defaults(details, { // TODO more details??
 		scope: framer.scope,
 		url: resource && resource.url,
 		mainSelector: frameDef.mainSelector,
-		type: frameDef.type
 	});
 	var bodyDef = _.find(frameDef.bodies, function(body) { return body.condition === condition;});
 	if (!bodyDef) return; // FIXME what to do here??
@@ -3679,9 +6050,9 @@ return HFrameDefinition;
 
 var HBodyDefinition = (function() {
 	
-function HBodyDefinition(el, frameset) {
+function HBodyDefinition(el, framesetDef) {
 	if (!el) return; // in case of inheritance
-	this.frameset = frameset;
+	this.framesetDefinition = framesetDef;
 	this.init(el);
 }
 
@@ -3711,15 +6082,14 @@ _.defaults(HBodyDefinition.prototype, {
 
 init: function(el) {
 	var bodyDef = this;
-	var frameset = bodyDef.frameset;
-	var hfNS = frameset.namespace;
+	var framesetDef = bodyDef.framesetDefinition;
 	var condition = el.getAttribute('condition');
 	var finalCondition;
 	if (condition) {
 		finalCondition = normalizeCondition(condition);
 		if (!finalCondition) {
 			finalCondition = condition;
-			logger.warn('Frame body defined with unknown condition: ' + condition);
+			console.warn('Frame body defined with unknown condition: ' + condition);
 		}
 	}
 	else finalCondition = 'loaded';
@@ -3730,20 +6100,19 @@ init: function(el) {
 		transforms: []
 	});
 	_.forEach(_.map(el.childNodes), function(node) {
-		if (DOM.getTagName(node) === hfNS.lookupTagName('transform')) {
+		if (DOM.getTagName(node) === framesetDef.namespaces.lookupTagNameNS('transform', HYPERFRAMESET_URN)) {
 			el.removeChild(node);
-			bodyDef.transforms.push(new HTransformDefinition(node, frameset));
+			bodyDef.transforms.push(new HTransformDefinition(node, framesetDef));
 		}	
 	});
 	if (!bodyDef.transforms.length && bodyDef.condition === 'loaded') {
-		logger.warn('HBody definition for loaded content contains no HTransform definitions');
+		console.warn('HBody definition for loaded content contains no HTransform definitions');
 	}
 },
 
 render: function(resource, details) {
 	var bodyDef = this;
-	var frameset = bodyDef.frameset;
-	var hfNS = frameset.namespace;
+	var framesetDef = bodyDef.framesetDefinition;
 	if (bodyDef.transforms.length <= 0) {
 		return bodyDef.element.cloneNode(true);
 	}
@@ -3758,6 +6127,13 @@ render: function(resource, details) {
 	})
 	.then(function(fragment) {
 		var el = bodyDef.element.cloneNode(false);
+		// crop to <body> if it exists
+		var htmlBody = DOM.find('body', fragment);
+		if (htmlBody) fragment = DOM.adoptContents(htmlBody, el.ownerDocument);
+		// remove all stylesheets
+		_.forEach(DOM.findAll('link[rel~=stylesheet], style', fragment), function(node) {
+			node.parentNode.removeChild(node);
+		});
 		DOM.insertNode('beforeend', el, fragment);
 		return el;
 	});
@@ -3771,9 +6147,9 @@ return HBodyDefinition;
 
 var HTransformDefinition = (function() {
 	
-function HTransformDefinition(el, frameset) {
+function HTransformDefinition(el, framesetDef) {
 	if (!el) return; // in case of inheritance
-	this.frameset = frameset;
+	this.framesetDefinition = framesetDef;
 	this.init(el);
 }
 
@@ -3781,35 +6157,33 @@ _.defaults(HTransformDefinition.prototype, {
 
 init: function(el) {
 	var transform = this;
-	var frameset = transform.frameset;
-	var hfNS = frameset.namespace;
+	var framesetDef = transform.framesetDefinition;
 	_.defaults(transform, {
 		element: el,
 		type: el.getAttribute('type') || 'main',
 		format: el.getAttribute('format')
     });
 	if (transform.type === 'main') transform.format = '';
-	var doc = frameset.document; // or el.ownerDocument
+	var doc = framesetDef.document; // or el.ownerDocument
 	var frag = doc.createDocumentFragment();
 	var node;
 	while (node = el.firstChild) frag.appendChild(node); // NOTE no adoption
 
 	var options;
-	if (el.hasAttribute('configid')) {
-		var configID = _.words(el.getAttribute('configid'))[0];
-		options = frameset.configData[configID];
+	if (el.hasAttribute('config')) {
+		var configID = _.words(el.getAttribute('config'))[0];
+		options = framesetDef.configData[configID];
 	}
-	var processor = transform.processor = framer.createProcessor(transform.type, options);
+	var processor = transform.processor = processors.create(transform.type, options, framesetDef.namespaces);
 	processor.loadTemplate(frag);
 },
 
 process: function(srcNode, details) {
 	var transform = this;
-	var frameset = transform.frameset;
-	var hfNS = frameset.namespace;
+	var framesetDef = transform.framesetDefinition;
 	var decoder;
 	if (transform.format) {
-		decoder = framer.createDecoder(transform.format);
+		decoder = decoders.create(transform.format, {}, framesetDef.namespaces);
 		decoder.init(srcNode);
 	}
 	else decoder = {
@@ -3830,8 +6204,6 @@ var HFramesetDefinition = (function() {
 
 function HFramesetDefinition(doc, settings) {
 	if (!doc) return; // in case of inheritance
-	this.defaultNamespaces = [];
-	this.addDefaultNamespace(hfDefaultNamespace);
 	this.namespaces = null;
 	this.init(doc, settings);
 }
@@ -3839,25 +6211,22 @@ function HFramesetDefinition(doc, settings) {
 _.defaults(HFramesetDefinition.prototype, {
 
 init: function(doc, settings) {
-	var frameset = this;
-	_.defaults(frameset, {
+	var framesetDef = this;
+	_.defaults(framesetDef, {
 		url: settings.framesetURL
 	});
 
-	frameset.namespaces = [];
-	var namespaces = CustomNS.getNamespaces(doc);
-	_.forEach(namespaces, function(nsDef) {
-		frameset.addNamespace(nsDef);
-	});
-	_.forEach(frameset.defaultNamespaces, function(nsDef) {
-		frameset.addNamespace(nsDef);
-	});
-	var hfNS = frameset.namespace = frameset.lookupNamespace(HYPERFRAMESET_URN);
+	var namespaces = framesetDef.namespaces = CustomNamespace.getNamespaces(doc);
+	if (!namespaces.lookupNamespace(HYPERFRAMESET_URN)) {
+		namespaces.add(hfDefaultNamespace);
+	}
 
 	// NOTE first rebase scope: urls
 	var scopeURL = URL(settings.scope);
 	rebase(doc, scopeURL);
-	var frameElts = DOM.findAll(frameset.lookupSelector('frame'), doc.body);
+	var frameElts = DOM.findAll(
+		framesetDef.namespaces.lookupSelector('frame', HYPERFRAMESET_URN), 
+		doc.body);
 	_.forEach(frameElts, function(el, index) { // FIXME hyperframes can't be outside of <body> OR descendants of repetition blocks
 		// NOTE first rebase @src with scope: urls
 		var src = el.getAttribute('src');
@@ -3866,6 +6235,15 @@ init: function(doc, settings) {
 			if (newSrc != src) el.setAttribute('src', newSrc);
 		}
 	});
+
+	// warn about not using @id
+	var idElements = DOM.findAll('*[id]:not(script)', doc.body);
+	if (idElements.length) {
+		console.warn('@id is strongly discouraged in frameset-documents (except on <script>).\n' +
+			'Found ' + idElements.length + ', ' + 
+			'first @id is ' + idElements[0].getAttribute('id')
+		);
+	}
 
 	// Add @id and @sourceurl to inline <script type="text/javascript">
 	var scripts = DOM.findAll('script', doc);
@@ -3880,7 +6258,7 @@ init: function(doc, settings) {
 		var sourceURL;
 		if (script.hasAttribute('sourceurl')) sourceURL = script.getAttribute('sourceurl');
 		else {
-			sourceURL = frameset.url + '__' + id; // FIXME this should be configurable
+			sourceURL = framesetDef.url + '__' + id; // FIXME this should be configurable
 			script.setAttribute('sourceurl', sourceURL);
 		}
 		script.text += '\n//# sourceURL=' + sourceURL;
@@ -3891,22 +6269,25 @@ init: function(doc, settings) {
 	_.forEach(DOM.findAll('script[for]', doc.head), function(script) {
 		doc.body.insertBefore(script, firstChild);
 		script.setAttribute('for', '');
-		logger.info('Moved <script for> in frameset <head> to <body>');
+		console.info('Moved <script for> in frameset <head> to <body>');
 	});
+
+	var allowedScope = 'panel, frame';
+	var allowedScopeSelector = framesetDef.namespaces.lookupSelector(allowedScope, HYPERFRAMESET_URN);
+	normalizeScopedStyles(doc, allowedScopeSelector);
 
 	var body = doc.body;
 	body.parentNode.removeChild(body);
-	frameset.document = doc;
-	frameset.element = body;
+	framesetDef.document = doc;
+	framesetDef.element = body;
 },
 
 preprocess: function() {
-	var frameset = this;
-	var hfNS = frameset.namespace;
-	var body = frameset.element;
-	_.defaults(frameset, {
+	var framesetDef = this;
+	var body = framesetDef.element;
+	_.defaults(framesetDef, {
 		configData: {}, // Indexed by @sourceURL
-		frames: {} // all hyperframe definitions. Indexed by @id (which may be auto-generated)
+		frames: {} // all hyperframe definitions. Indexed by @defid (which may be auto-generated)
 	});
 
 	var scripts = DOM.findAll('script', body);
@@ -3915,7 +6296,7 @@ preprocess: function() {
 		if (script.type && !/^text\/javascript/.test(script.type)) return;
 
 		if (script.hasAttribute('src')) { // external javascript in <body> is invalid
-			logger.warn('Frameset <body> may not contain external scripts: \n' +
+			console.warn('Frameset <body> may not contain external scripts: \n' +
 				script.cloneNode(false).outerHTML);
 			script.parentNode.removeChild(script);
 			return;
@@ -3930,8 +6311,8 @@ preprocess: function() {
 				DOM.insertNode('beforeend', document.head, newScript);
 			}
 			catch(err) { // TODO test if this actually catches script errors
-				logger.warn('Error evaluating inline script in frameset:\n' +
-					frameset.url + '#' + script.id);
+				console.warn('Error evaluating inline script in frameset:\n' +
+					framesetDef.url + '#' + script.id);
 				Task.postError(err);
 			}
 			script.parentNode.removeChild(script); // physical <script> no longer needed
@@ -3939,7 +6320,7 @@ preprocess: function() {
 		}
 
 		if (script.getAttribute('for') !== '') {
-			logger.warn('<script> may only contain EMPTY @for: \n' +
+			console.warn('<script> may only contain EMPTY @for: \n' +
 				script.cloneNode(false).outerHTML);
 			script.parentNode.removeChild(script);
 			return;
@@ -3953,34 +6334,35 @@ preprocess: function() {
 		}
 		if (!scriptFor) scriptFor = script.parentNode;
 		
-		// FIXME @configID shouldn't be hard-wired here
-		var configID = scriptFor.hasAttribute('configID') ? 
-			scriptFor.getAttribute('configID') :
+		// FIXME @config shouldn't be hard-wired here
+		var configID = scriptFor.hasAttribute('config') ? 
+			scriptFor.getAttribute('config') :
 			'';
-		// TODO we can add more than one configID to an element but only first is used
+		// TODO we can add more than one @config to an element but only first is used
 		configID = configID ?
 			configID.replace(/\s*$/, ' ' + sourceURL) :
 			sourceURL;
-		scriptFor.setAttribute('configID', configID);
+		scriptFor.setAttribute('config', configID);
 
 		var fnText = 'return (' + script.text + '\n);';
 
 		try {
 			var fn = Function(fnText);
 			var object = fn();
-			frameset.configData[sourceURL] = object;
+			framesetDef.configData[sourceURL] = object;
 		}
 		catch(err) { 
-			logger.warn('Error evaluating inline script in frameset:\n' +
-				frameset.url + '#' + script.id);
+			console.warn('Error evaluating inline script in frameset:\n' +
+				framesetDef.url + '#' + script.id);
 			Task.postError(err);
 		}
 
 		script.parentNode.removeChild(script); // physical <script> no longer needed
 	});
 
-
-	var frameElts = DOM.findAll(frameset.lookupSelector('frame'), body);
+	var frameElts = DOM.findAll(
+		framesetDef.namespaces.lookupSelector('frame', HYPERFRAMESET_URN), 
+		body);
 	var frameDefElts = [];
 	var frameRefElts = [];
 	_.forEach(frameElts, function(el, index) { // FIXME hyperframes can't be outside of <body> OR descendants of repetition blocks
@@ -4007,95 +6389,36 @@ preprocess: function() {
 	});
 	_.forEach(frameDefElts, function(el) {
 		var defId = el.getAttribute('defid');
-		frameset.frames[defId] = new HFrameDefinition(el, frameset);
+		framesetDef.frames[defId] = new HFrameDefinition(el, framesetDef);
 	});
 	_.forEach(frameRefElts, function(el) {
 		var def = el.getAttribute('def');
-		if (!frameset.frames[def]) {
-			logger.warn('HyperFrame references non-existant frame: ' + def);
+		var ref = framesetDef.frames[def];
+		if (!ref) {
+			console.warn('Frame declaration references non-existant frame definition: ' + def);
+			return;
 		}
+		var refEl = ref.element;
+		if (!refEl.hasAttribute('scopeid')) return;
+		var id = el.getAttribute('id');
+		if (id) {
+			console.warn('Frame declaration references a frame definition with scoped-styles but these cannot be applied because the frame declaration has its own @id: ' + id);
+			return;
+		}
+		id = refEl.getAttribute('id');
+		var scopeId = refEl.getAttribute('scopeid');
+		if (id !== scopeId) {
+			console.warn('Frame declaration references a frame definition with scoped-styles but these cannot be applied because the frame definition has its own @id: ' + id);
+			return;
+		}
+		el.setAttribute('id', scopeId);
 	});
 
 },
 
 render: function() {
-	var frameset = this;
-	return frameset.element.cloneNode(true);
-},
-
-addDefaultNamespace: function(nsSpec) {
 	var framesetDef = this;
-	var nsDef = new CustomNS(nsSpec);
-	var matchingNS = _.find(framesetDef.defaultNamespaces, function(def) {
-		if (_.lc(def.urn) === _.lc(nsDef.urn)) {
-			if (def.prefix !== nsDef.prefix) logger.warn('Attempted to add default namespace with same urn as one already present: ' + def.urn);
-			return true;
-		}
-		if (def.prefix === nsDef.prefix) {
-			if (_.lc(def.urn) !== _.lc(nsDef.urn)) logger.warn('Attempted to add default namespace with same prefix as one already present: ' + def.prefix);
-			return true;
-		}
-	});
-	if (matchingNS) return;
-	framesetDef.defaultNamespaces.push(nsDef);
-
-	framesetDef.addNamespace(nsDef);
-},
-
-addNamespace: function(nsDef) {
-	var framesetDef = this;
-	if (!framesetDef.namespaces) return;
-
-	var matchingNS = _.find(framesetDef.namespaces, function(def) {
-		if (_.lc(def.urn) === _.lc(nsDef.urn)) {
-			if (def.prefix !== nsDef.prefix) logger.warn('Attempted to add namespace with same urn as one already present: ' + def.urn);
-			return true;
-		}
-		if (def.prefix === nsDef.prefix) {
-			if (_.lc(def.urn) !== _.lc(nsDef.urn)) logger.warn('Attempted to add namespace with same prefix as one already present: ' + def.prefix);
-			return true;
-		}
-	});
-	if (matchingNS) return;
-	framesetDef.namespaces.push(nsDef);
-},
-
-lookupNamespace: function(urn) {
-	var framesetDef = this;
-	urn = _.lc(urn);
-	var nsDef = _.find(framesetDef.namespaces, function(def) {
-		return (_.lc(def.urn) === urn);
-	});
-	return nsDef;
-},
-
-
-lookupPrefix: function(urn) {
-	var framesetDef = this;
-	var nsDef = framesetDef.lookupNamespace(urn);
-	return nsDef && nsDef.prefix;
-},
-
-lookupNamespaceURI: function(prefix) {
-	var framesetDef = this;
-	prefix = _.lc(prefix);
-	var nsDef = _.find(framesetDef.namespaces, function(def) {
-		return (def.prefix === prefix);
-	});
-	return nsDef && nsDef.urn;
-},
-
-lookupTagNameNS: function(name, urn) {
-	var framesetDef = this;
-	var nsDef = framesetDef.lookupNamespace(urn);
-	if (!nsDef) return ''; // TODO is this correct?
-	return nsDef.prefix + name; // TODO _.lc(name) ??
-},
-
-lookupSelector: function(selector) {
-	var hfNS = this.namespace;
-	var tags = selector.split(/\s*,\s*|\s+/);
-	return _.map(tags, function(tag) { return hfNS.lookupSelector(tag); }).join(', ');
+	return framesetDef.element.cloneNode(true);
 }
 
 });
@@ -4105,6 +6428,8 @@ lookupSelector: function(selector) {
 	scope:{path}
  is rewritten with `path` being relative to the current scope.
  */
+
+var urlAttributes = URL.attributes;
 
 function rebase(doc, scopeURL) {
 	_.forOwn(urlAttributes, function(attrList, tag) {
@@ -4125,6 +6450,75 @@ function rebaseURL(url, baseURL) {
 	return baseURL.resolve(relURL);
 }
 
+function normalizeScopedStyles(doc, allowedScopeSelector) {
+	var scopedStyles = DOM.findAll('style[scoped]', doc.body);
+	var dummyDoc = document.implementation.createHTMLDocument('');
+	_.forEach(scopedStyles, function(el, index) {
+		var scope = el.parentNode;
+		if (!DOM.matches(scope, allowedScopeSelector)) {
+			console.warn('Removing <style scoped>. Must be child of ' + allowedScopeSelector);
+			scope.removeChild(el);
+			return;
+		}
+		
+		var scopeId = '__scope_' + index + '__';
+		scope.setAttribute('scopeid', scopeId);
+		if (scope.hasAttribute('id')) scopeId = scope.getAttribute('id');
+		else scope.setAttribute('id', scopeId);
+
+		el.removeAttribute('scoped');
+		var sheet = el.sheet || (function() {
+			// Firefox doesn't seem to instatiate el.sheet in XHR documents
+			var dummyEl = dummyDoc.createElement('style');
+			dummyEl.textContent = el.textContent;
+			DOM.insertNode('beforeend', dummyDoc.head, dummyEl);
+			return dummyEl.sheet;
+		})();
+		forRules(sheet, processRule, scope);
+		var cssText = _.map(sheet.cssRules, function(rule) { 
+				return rule.cssText; 
+			}).join('\n');
+		el.textContent = cssText;
+		DOM.insertNode('beforeend', doc.head, el);
+		return;
+	});
+}
+
+function processRule(rule, id, parentRule) {
+	var scope = this;
+	switch (rule.type) {
+	case 1: // CSSRule.STYLE_RULE
+		// prefix each selector in selector-chain with scopePrefix
+		// selector-chain is split on COMMA (,) that is not inside BRACKETS. Technically: not followed by a RHB ')' unless first followed by LHB '(' 
+		var scopeId = scope.getAttribute('scopeid');
+		var scopePrefix = '#' + scopeId + ' ';
+		var selectorText = scopePrefix + rule.selectorText.replace(/,(?![^(]*\))/g, ', ' + scopePrefix); 
+		var cssText = rule.cssText.replace(rule.selectorText, '');
+		cssText = selectorText + ' ' + cssText;
+		parentRule.deleteRule(id);
+		parentRule.insertRule(cssText, id);
+		break;
+
+	case 11: // CSSRule.COUNTER_STYLE_RULE
+		break;
+
+	case 4: // CSSRule.MEDIA_RULE
+	case 12: // CSSRule.SUPPORTS_RULE
+		forRules(rule, processRule, scope);
+		break;
+	
+	default:
+		console.warn('Deleting invalid rule for <style scoped>: \n' + rule.cssText);
+		parentRule.deleteRule(id);
+		break;
+	}
+}
+
+function forRules(parentRule, callback, context) {
+	var ruleList = parentRule.cssRules;
+	for (var i=ruleList.length-1; i>=0; i--) callback.call(context, ruleList[i], i, parentRule);
+}
+	
 
 return HFramesetDefinition;	
 })();
@@ -4147,8 +6541,8 @@ iAttached: function(handlers) {
 	var object = this;
 	object.options = {};
 	var element = object.element;
-	if (!element.hasAttribute('configid')) return;
-	var configID = _.words(element.getAttribute('configid'))[0];	
+	if (!element.hasAttribute('config')) return;
+	var configID = _.words(element.getAttribute('config'))[0];	
 	var options = framer.definition.configData[configID];
 	object.options = options;
 }
@@ -4317,7 +6711,17 @@ var Layout = sprockets.evolve(Link, {
 role: 'group',
 
 owns: {
-	get: function() { return _.filter(this.element.children, function(el) { return DOM.matches(el, framer.definition.lookupSelector('hlayout, vlayout, deck, rdeck, panel, frame')); }); }
+	get: function() { 
+		var namespaces = framer.definition.namespaces;
+		return _.filter(this.element.children, function(el) { 
+			return DOM.matches(el, 
+				namespaces.lookupSelector(
+					'hlayout, vlayout, deck, rdeck, panel, frame', 
+					HYPERFRAMESET_URN
+				)
+			); 
+		}); 
+	}
 }
 
 });
@@ -4325,11 +6729,12 @@ owns: {
 _.assign(Layout, {
 
 iEnteredDocument: function() {
+	var namespaces = framer.definition.namespaces;
 	var element = this.element;
 	var parent = element.parentNode;
 
 	// FIXME dimension setting should occur before becoming visible
-	if (DOM.matches(parent, framer.definition.lookupSelector('layer'))) { // TODO vh, vw not tested on various platforms
+	if (DOM.matches(parent, namespaces.lookupSelector('layer', HYPERFRAMESET_URN))) { // TODO vh, vw not tested on various platforms
 		var height = this.attr('height'); // TODO css unit parsing / validation
 		if (!height) height = '100vh';
 		else height = height.replace('%', 'vh');
@@ -4344,7 +6749,7 @@ iEnteredDocument: function() {
 	
 	function normalizeChild(node) {
 		var element = this;
-		if (DOM.matches(node, framer.definition.lookupSelector('hlayout, vlayout, deck, rdeck, panel, frame'))) return; 
+		if (DOM.matches(node, namespaces.lookupSelector('hlayout, vlayout, deck, rdeck, panel, frame', HYPERFRAMESET_URN))) return; 
 		switch (node.nodeType) {
 		case 1: // hide non-layout elements
 			node.hidden = true;
@@ -4588,10 +6993,24 @@ load: function(response) { // FIXME need a teardown method that releases child-f
 insert: function(bodyElement) { // FIXME need a teardown method that releases child-frames	
 	var frame = this;
 	
+	var options = frame.options;
+
 	// FIXME .bodyElement will probably become .bodies[] for transition animations.
-	if (frame.bodyElement) sprockets.removeNode(frame.bodyElement);
+	if (frame.bodyElement) {
+		if (options && options.bodyLeft) {
+			try { options.bodyLeft(frame, frame.bodyElement); } 
+			catch (err) { Task.postError(err); }
+		}
+		sprockets.removeNode(frame.bodyElement);
+	}
+
 	sprockets.insertNode('beforeend', frame.element, bodyElement);
 	frame.bodyElement = bodyElement;
+
+	if (options && options.bodyEntered) {
+		try { options.bodyEntered(frame, frame.bodyElement); } 
+		catch (err) { Task.postError(err); }
+	}
 },
 
 });
@@ -4656,8 +7075,8 @@ frameLeft: function(frame) {
 
 render: function() {
 
-	var hframeset = this;
-	var definition = hframeset.definition;
+	var frameset = this;
+	var definition = frameset.definition;
 	var dstBody = this.element;
 
 	var srcBody = definition.render();
@@ -4852,39 +7271,39 @@ return HFrameset;
 
 function registerHyperFramesetElements() {
 
-var framesetDef = framer.definition;
+var namespaces = framer.definition.namespaces;
 
 sprockets.registerElement('body', HFrameset);
-sprockets.registerElement(framesetDef.lookupSelector('frame'), HFrame);
+sprockets.registerElement(namespaces.lookupSelector('frame', HYPERFRAMESET_URN), HFrame);
 
-sprockets.registerElement(framesetDef.lookupSelector('layer'), Layer);
-sprockets.registerElement(framesetDef.lookupSelector('popup'), Popup);
-sprockets.registerElement(framesetDef.lookupSelector('panel'), Panel);
-sprockets.registerElement(framesetDef.lookupSelector('vlayout'), VLayout);
-sprockets.registerElement(framesetDef.lookupSelector('hlayout'), HLayout);
-sprockets.registerElement(framesetDef.lookupSelector('deck'), Deck);
-sprockets.registerElement(framesetDef.lookupSelector('rdeck'), ResponsiveDeck);
+sprockets.registerElement(namespaces.lookupSelector('layer', HYPERFRAMESET_URN), Layer);
+sprockets.registerElement(namespaces.lookupSelector('popup', HYPERFRAMESET_URN), Popup);
+sprockets.registerElement(namespaces.lookupSelector('panel', HYPERFRAMESET_URN), Panel);
+sprockets.registerElement(namespaces.lookupSelector('vlayout', HYPERFRAMESET_URN), VLayout);
+sprockets.registerElement(namespaces.lookupSelector('hlayout', HYPERFRAMESET_URN), HLayout);
+sprockets.registerElement(namespaces.lookupSelector('deck', HYPERFRAMESET_URN), Deck);
+sprockets.registerElement(namespaces.lookupSelector('rdeck', HYPERFRAMESET_URN), ResponsiveDeck);
 
 var cssText = [
 '*[hidden] { display: none !important; }', // TODO maybe not !important
 'html, body { margin: 0; padding: 0; }',
 'html { width: 100%; height: 100%; }',
-framesetDef.lookupSelector('layer, popup, hlayout, vlayout, deck, rdeck, panel, frame, body') + ' { box-sizing: border-box; }', // TODO http://css-tricks.com/inheriting-box-sizing-probably-slightly-better-best-practice/
-framesetDef.lookupSelector('layer') + ' { display: block; position: fixed; top: 0; left: 0; width: 0; height: 0; }',
-framesetDef.lookupSelector('hlayout, vlayout, deck, rdeck') + ' { display: block; width: 0; height: 0; text-align: left; margin: 0; padding: 0; }', // FIXME text-align: start
-framesetDef.lookupSelector('hlayout, vlayout, deck, rdeck') + ' { width: 100%; height: 100%; }', // FIXME should be 0,0 before manual calculations
-framesetDef.lookupSelector('frame, panel') + ' { display: block; width: auto; height: auto; text-align: left; margin: 0; padding: 0; }', // FIXME text-align: start
-framesetDef.lookupSelector('body') + ' { display: block; width: auto; height: auto; margin: 0; }',
-framesetDef.lookupSelector('popup') + ' { display: block; position: relative; width: 0; height: 0; }',
-framesetDef.lookupSelector('popup') + ' > * { position: absolute; top: 0; left: 0; }', // TODO or change 'body' styling above
-framesetDef.lookupSelector('vlayout') + ' { height: 100%; }',
-framesetDef.lookupSelector('hlayout') + ' { width: 100%; overflow-y: hidden; }',
-framesetDef.lookupSelector('vlayout') + ' > * { display: block; float: left; width: 100%; height: auto; text-align: left; }',
-framesetDef.lookupSelector('vlayout') + ' > *::after { clear: both; }',
-framesetDef.lookupSelector('hlayout') + ' > * { display: block; float: left; width: auto; height: 100%; vertical-align: top; overflow-y: auto; }',
-framesetDef.lookupSelector('hlayout') + '::after { clear: both; }',
-framesetDef.lookupSelector('deck') + ' > * { width: 100%; height: 100%; }',
-framesetDef.lookupSelector('rdeck') + ' > * { width: 0; height: 0; }',
+namespaces.lookupSelector('layer, popup, hlayout, vlayout, deck, rdeck, panel, frame, body', HYPERFRAMESET_URN) + ' { box-sizing: border-box; }', // TODO http://css-tricks.com/inheriting-box-sizing-probably-slightly-better-best-practice/
+namespaces.lookupSelector('layer', HYPERFRAMESET_URN) + ' { display: block; position: fixed; top: 0; left: 0; width: 0; height: 0; }',
+namespaces.lookupSelector('hlayout, vlayout, deck, rdeck', HYPERFRAMESET_URN) + ' { display: block; width: 0; height: 0; text-align: left; margin: 0; padding: 0; }', // FIXME text-align: start
+namespaces.lookupSelector('hlayout, vlayout, deck, rdeck', HYPERFRAMESET_URN) + ' { width: 100%; height: 100%; }', // FIXME should be 0,0 before manual calculations
+namespaces.lookupSelector('frame, panel', HYPERFRAMESET_URN) + ' { display: block; width: auto; height: auto; text-align: left; margin: 0; padding: 0; }', // FIXME text-align: start
+namespaces.lookupSelector('body', HYPERFRAMESET_URN) + ' { display: block; width: auto; height: auto; margin: 0; }',
+namespaces.lookupSelector('popup', HYPERFRAMESET_URN) + ' { display: block; position: relative; width: 0; height: 0; }',
+namespaces.lookupSelector('popup', HYPERFRAMESET_URN) + ' > * { position: absolute; top: 0; left: 0; }', // TODO or change 'body' styling above
+namespaces.lookupSelector('vlayout', HYPERFRAMESET_URN) + ' { height: 100%; }',
+namespaces.lookupSelector('hlayout', HYPERFRAMESET_URN) + ' { width: 100%; overflow-y: hidden; }',
+namespaces.lookupSelector('vlayout', HYPERFRAMESET_URN) + ' > * { display: block; float: left; width: 100%; height: auto; text-align: left; }',
+namespaces.lookupSelector('vlayout', HYPERFRAMESET_URN) + ' > *::after { clear: both; }',
+namespaces.lookupSelector('hlayout', HYPERFRAMESET_URN) + ' > * { display: block; float: left; width: auto; height: 100%; vertical-align: top; overflow-y: auto; }',
+namespaces.lookupSelector('hlayout', HYPERFRAMESET_URN) + '::after { clear: both; }',
+namespaces.lookupSelector('deck', HYPERFRAMESET_URN) + ' > * { width: 100%; height: 100%; }',
+namespaces.lookupSelector('rdeck', HYPERFRAMESET_URN) + ' > * { width: 0; height: 0; }',
 ].join('\n');
 
 var style = document.createElement('style');
@@ -4964,7 +7383,7 @@ start: function(startOptions) {
 		return Promise.wait(function() { return !!document.body; });		
 	},
 
-	function() { // lookup or detect framesetURL
+	function() { // lookup or detect frameset.URL
 		var framerConfig;
 		framerConfig = framer.lookup(document.URL);
 		if (framerConfig) return framerConfig;
@@ -4974,11 +7393,11 @@ start: function(startOptions) {
 			});
 	},
 
-	function(framerConfig) { // initiate fetch of framesetURL
+	function(framerConfig) { // initiate fetch of frameset.URL
 		if (!framerConfig) throw Error('No frameset could be determined for this page');
 		framer.scope = framerConfig.scope; // FIXME shouldn't set this until loadFramesetDefinition() returns success
 		var framesetURL = URL(framerConfig.framesetURL);
-		if (framesetURL.hash) logger.info('Ignoring hash component of frameset URL: ' + framesetURL.hash);
+		if (framesetURL.hash) console.info('Ignoring hash component of frameset URL: ' + framesetURL.hash);
 		framer.framesetURL = framerConfig.framesetURL = framesetURL.nohash;
 		return httpProxy.load(framer.framesetURL, { responseType: 'document' })
 		.then(function(response) {
@@ -5074,8 +7493,9 @@ framesetLeft: function(frameset) { // WARN this should never happen
 },
 
 frameEntered: function(frame) {
+	var namespaces = framer.definition.namespaces;
 	var parentFrame;
-	var parentElement = DOM.closest(frame.element.parentNode, framer.definition.lookupSelector('frame')); // TODO frame.element.parentNode.ariaClosest('frame')
+	var parentElement = DOM.closest(frame.element.parentNode, namespaces.lookupSelector('frame', HYPERFRAMESET_URN)); // TODO frame.element.parentNode.ariaClosest('frame')
 	if (parentElement) parentFrame = HFrame(parentElement);
 	else {
 		parentElement = document.body; // TODO  frame.elenent.parentNode.ariaClosest('frameset'); 
@@ -5253,7 +7673,7 @@ onRequestNavigation: function(e, frame) { // `return false` means success (so pr
 
 onPageLink: function(url, details) {
 	var framer = this;
-	logger.warn('Ignoring on-same-page links for now.'); // FIXME
+	console.warn('Ignoring on-same-page links for now.'); // FIXME
 },
 
 navigate: function(url, changeset) { // FIXME doesn't support replaceState
@@ -5340,7 +7760,7 @@ onPopState: function(changeset) {
 	var frames = [];
 	var url = changeset.url;
 	if (url !== document.URL) {
-		logger.warn('Popped state URL does not match address-bar URL.');
+		console.warn('Popped state URL does not match address-bar URL.');
 		// FIXME needs an optional error recovery, perhaps reloading document.URL
 	}
 	framer.load(url, changeset, 0);
@@ -5452,80 +7872,9 @@ config: function(options) {
 
 });
 
-framer.filters = (function() {
-
-var items = {};
-
-return {
-
-register: function(name, fn) {
-	if (!/^[_a-zA-Z][_a-zA-Z0-9]*$/.test(name)) { // TODO should be in filters.register()
-		logger.error('registerFilter called with invalid name: ' + name);
-		return; // TODO throw??
-	}
-	if (this.has(name)) {
-		logger.warn('A filter by that name already exists: ' + name);
-		return; // TODO throw??
-	}
-	items[name] = fn;
-},
-
-has: function(name) {
-	return (name in items);
-},
-
-get: function(name) { 
-	if (!this.has(name)) throw name + ' is not a registered controller';
-	return items[name];
-},
-
-evaluate: function(name, value, params) {
-	var fn = this.get(name);
-	// NOTE filter functions should only accept string_or_number_or_boolean
-	// FIXME Need to wrap fn() to assert / cast supplied value and accept params
-	var args = params.slice(0);
-	args.unshift(value);
-	return fn.apply(undefined, args);
-}
-
-
-};
-
-})();
-
-
 
 _.defaults(framer, {
 
-decoders: {},
-
-registerDecoder: function(type, constructor) {
-	this.decoders[type] = constructor;
-},
-
-createDecoder: function(type, options) {
-	return new this.decoders[type](options, this.definition);
-},
-
-processors: {},
-
-registerProcessor: function(type, constructor) {
-	this.processors[type] = constructor;
-},
-
-createProcessor: function(type, options) {
-	return new this.processors[type](options, this.definition, this.filters);
-},
-
-registerFilter: function(name, fn) {
-	this.filters.register(name, fn);
-}
-
-});
-
-_.defaults(framer, {
-
-	controllers: controllers,
 	HFrameDefinition: HFrameDefinition,
 	HFramesetDefinition: HFramesetDefinition,
 	HFrame: HFrame,
@@ -5546,1477 +7895,3 @@ return framer;
 
 }).call(window);
 
-/*
- * Date Format 1.2.3
- * (c) 2007-2009 Steven Levithan <stevenlevithan.com>
- * MIT license
- *
- * Includes enhancements by Scott Trenda <scott.trenda.net>
- * and Kris Kowal <cixar.com/~kris.kowal/>
- *
- * Accepts a date, a mask, or a date and a mask.
- * Returns a formatted version of the given date.
- * The date defaults to the current date/time.
- * The mask defaults to dateFormat.masks.default.
- */
-
-Meeko.stuff.dateFormat = (function() {
-
-var dateFormat = function () {
-	var	token = /d{1,4}|m{1,4}|yy(?:yy)?|([HhMsTt])\1?|[LloSZ]|"[^"]*"|'[^']*'/g,
-		timezone = /\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g,
-		timezoneClip = /[^-+\dA-Z]/g,
-		pad = function (val, len) {
-			val = String(val);
-			len = len || 2;
-			while (val.length < len) val = "0" + val;
-			return val;
-		};
-
-	// Regexes and supporting functions are cached through closure
-	return function (date, mask, utc) {
-		var dF = dateFormat;
-
-		// You can't provide utc if you skip other args (use the "UTC:" mask prefix)
-		if (arguments.length == 1 && Object.prototype.toString.call(date) == "[object String]" && !/\d/.test(date)) {
-			mask = date;
-			date = undefined;
-		}
-
-		// Passing date through Date applies Date.parse, if necessary
-		date = date ? new Date(date) : new Date;
-		if (isNaN(date)) throw SyntaxError("invalid date");
-
-		mask = String(dF.masks[mask] || mask || dF.masks["default"]);
-
-		// Allow setting the utc argument via the mask
-		if (mask.slice(0, 4) == "UTC:") {
-			mask = mask.slice(4);
-			utc = true;
-		}
-
-		var	_ = utc ? "getUTC" : "get",
-			d = date[_ + "Date"](),
-			D = date[_ + "Day"](),
-			m = date[_ + "Month"](),
-			y = date[_ + "FullYear"](),
-			H = date[_ + "Hours"](),
-			M = date[_ + "Minutes"](),
-			s = date[_ + "Seconds"](),
-			L = date[_ + "Milliseconds"](),
-			o = utc ? 0 : date.getTimezoneOffset(),
-			flags = {
-				d:    d,
-				dd:   pad(d),
-				ddd:  dF.i18n.dayNames[D],
-				dddd: dF.i18n.dayNames[D + 7],
-				m:    m + 1,
-				mm:   pad(m + 1),
-				mmm:  dF.i18n.monthNames[m],
-				mmmm: dF.i18n.monthNames[m + 12],
-				yy:   String(y).slice(2),
-				yyyy: y,
-				h:    H % 12 || 12,
-				hh:   pad(H % 12 || 12),
-				H:    H,
-				HH:   pad(H),
-				M:    M,
-				MM:   pad(M),
-				s:    s,
-				ss:   pad(s),
-				l:    pad(L, 3),
-				L:    pad(L > 99 ? Math.round(L / 10) : L),
-				t:    H < 12 ? "a"  : "p",
-				tt:   H < 12 ? "am" : "pm",
-				T:    H < 12 ? "A"  : "P",
-				TT:   H < 12 ? "AM" : "PM",
-				Z:    utc ? "UTC" : (String(date).match(timezone) || [""]).pop().replace(timezoneClip, ""),
-				o:    (o > 0 ? "-" : "+") + pad(Math.floor(Math.abs(o) / 60) * 100 + Math.abs(o) % 60, 4),
-				S:    ["th", "st", "nd", "rd"][d % 10 > 3 ? 0 : (d % 100 - d % 10 != 10) * d % 10]
-			};
-
-		return mask.replace(token, function ($0) {
-			return $0 in flags ? flags[$0] : $0.slice(1, $0.length - 1);
-		});
-	};
-}();
-
-// Some common format strings
-dateFormat.masks = {
-	"default":      "ddd mmm dd yyyy HH:MM:ss",
-	shortDate:      "m/d/yy",
-	mediumDate:     "mmm d, yyyy",
-	longDate:       "mmmm d, yyyy",
-	fullDate:       "dddd, mmmm d, yyyy",
-	shortTime:      "h:MM TT",
-	mediumTime:     "h:MM:ss TT",
-	longTime:       "h:MM:ss TT Z",
-	isoDate:        "yyyy-mm-dd",
-	isoTime:        "HH:MM:ss",
-	isoDateTime:    "yyyy-mm-dd'T'HH:MM:ss",
-	isoUtcDateTime: "UTC:yyyy-mm-dd'T'HH:MM:ss'Z'"
-};
-
-// Internationalization strings
-dateFormat.i18n = {
-	dayNames: [
-		"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
-		"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
-	],
-	monthNames: [
-		"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-		"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
-	]
-};
-
-return dateFormat;
-
-}).call(window);
-
-
-/*!
- * HyperFrameset Processors and Decoders
- * Copyright 2014-2015 Sean Hogan (http://meekostuff.net/)
- * Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
- */
-
-/* NOTE
-	+ assumes DOMSprockets + HyperFrameset
-*/
-/* TODO
-    + The passing of nodes between documents needs to be audited.
-		Safari and IE10,11 in particular seem to require nodes to be imported / adopted
-		(not fully understood right now)
- */
-
-(function(classnamespace) {
-
-var window = this;
-var document = window.document;
-
-var _ = Meeko.stuff;
-var DOM = Meeko.DOM;
-var Task = Meeko.Task;
-var Promise = Meeko.Promise;
-var logger = Meeko.logger;
-var framer = Meeko.framer;
-
-/* WARN 
-	on IE11 and Edge, certain elements (or attrs) *not* attached to a document 
-	can trash the layout engine. Examples:
-		- <custom-element>
-		- <element style="...">
-		- <li value="NaN">
-*/
-var FRAGMENTS_ARE_INERT = !(window.HTMLUnknownElement && 
-	'runtimeStyle' in window.HTMLUnknownElement.prototype);
-// NOTE actually IE10 is okay, but no reasonable feature detection has been determined
-
-var MainProcessor = (function() {
-
-function MainProcessor(options, framesetDef) {}
-
-_.defaults(MainProcessor.prototype, {
-
-loadTemplate: function(template) {
-	if (/\S+/.test(template.textContent)) logger.warn('"main" transforms do not use templates');
-},
-
-transform: function(provider, details) { // TODO how to use details?
-	var srcNode = provider.srcNode;
-	var srcDoc = srcNode.nodeType === 9 ? srcNode : srcNode.ownerDocument;
-	var main;
-	if (!main) main = DOM.find('main, [role=main]', srcNode);
-	if (!main && srcNode === srcDoc) main = srcDoc.body;
-	if (!main) main = srcNode;
-
-	var frag = srcDoc.createDocumentFragment();
-	var node;
-	while (node = main.firstChild) frag.appendChild(node); // NOTE no adoption
-	return frag;
-}
-	
-});
-
-return MainProcessor;
-})();
-
-framer.registerProcessor('main', MainProcessor);
-
-
-var ScriptProcessor = (function() {
-
-function ScriptProcessor(options, framesetDef) {
-	this.frameset = framesetDef;
-	this.processor = options;
-}
-
-_.defaults(ScriptProcessor.prototype, {
-
-loadTemplate: function(template) {
-	var script;
-	_.forEach(_.map(template.childNodes), function(node) {
-		switch (node.nodeType) {
-		case 1: // Element
-			switch (DOM.getTagName(node)) {
-			case 'script':
-				if (script) logger.warn('Ignoring secondary <script> in "script" transform template');
-				else script = node;
-				return;
-			default:
-				logger.warn('Ignoring unexpected non-<script> element in "script" transform template');
-				return;
-			}
-			break; // should never reach here
-		case 3: // Text
-			if (/\S+/.test(node.nodeValue)) logger.warn('"script" transforms should not have non-empty text-nodes');
-			return;
-		case 8: // Comment
-			return;
-		default:
-			logger.warn('Unexpected node in "script" transform template');
-			return;
-		}
-	});
-	if (!script) {
-		// no problem if already a processor defined in new ScriptProcessor(options)
-		if (this.processor) return;
-		logger.warn('No <script> found in "script" transform template');
-		return;
-	}
-	try { this.processor = (Function('return (' + script.text + ')'))(); }
-	catch(err) { Task.postError(err); }
-	
-	if (!this.processor || !this.processor.transform) {
-		logger.warn('"script" transform template did not produce valid transform object');
-		return;
-	}
-},
-
-transform: function(provider, details) {
-	var srcNode = provider.srcNode;
-	if (!this.processor || !this.processor.transform) {
-		logger.warn('"script" transform template did not produce valid transform object');
-		return;
-	}
-	return this.processor.transform(srcNode, details);
-}
-	
-});
-
-
-return ScriptProcessor;
-})();
-
-framer.registerProcessor('script', ScriptProcessor);
-
-
-// NOTE textAttr & htmlAttr used in HazardProcessor & CSSDecoder
-var textAttr = '_text';
-var htmlAttr = '_html';
-
-var HazardProcessor = (function() {
-
-var HAZARD_TRANSFORM_URN = 'HazardTransform';
-var hazDefaultNS = {
-	urn: HAZARD_TRANSFORM_URN,
-	name: 'haz',
-	style: 'xml'
-}
-var HAZARD_EXPRESSION_URN = 'HazardExpression';
-var exprDefaultNS = {
-	urn: HAZARD_EXPRESSION_URN,
-	name: 'expr',
-	style: 'xml'
-}
-var HAZARD_MEXPRESSION_URN = 'HazardMExpression';
-var mexprDefaultNS = {
-	urn: HAZARD_MEXPRESSION_URN,
-	name: 'mexpr',
-	style: 'xml'
-}
-
-/* 
- NOTE IE11 / Edge has a bad performance regression with DOM fragments 
- containing certain elements / attrs, see
-     https://connect.microsoft.com/IE/feedback/details/1776195/ie11-edge-performance-regression-with-dom-fragments
-*/
-var PERFORMANCE_UNFRIENDLY_CONDITIONS = [
-	{
-		tag: '*', // must be present for checkElementPerformance()
-		attr: 'style',
-		description: 'an element with @style'
-	},
-	{
-		tag: 'li',
-		attr: 'value',
-		description: 'a <li> element with @value'
-	},
-	{
-		tag: undefined,
-		description: 'an unknown or custom element'
-	}
-];
-
-function checkElementPerformance(el, namespaces) {
-	var exprPrefix = namespaces.lookupPrefix(HAZARD_EXPRESSION_URN);
-	var mexprPrefix = namespaces.lookupPrefix(HAZARD_MEXPRESSION_URN);
-
-	var outerHTML;
-	_.forEach(PERFORMANCE_UNFRIENDLY_CONDITIONS, function(cond) {
-		switch (cond.tag) {
-		case undefined: case null:
-			if (el.toString() !== '[object HTMLUnknownElement]') return;
-			break;
-		default:
-			if (DOM.getTagName(el) !== cond.tag) return;
-			// fall-thru
-		case '*': case '':
-			if (_.every(
-				['', exprPrefix, mexprPrefix], function(prefix) {
-					var attr = prefix + cond.attr;
-					return !el.hasAttribute(attr);
-				})
-			) return;
-			break;
-		}
-		if (!outerHTML) outerHTML = el.cloneNode(false).outerHTML; // FIXME caniuse outerHTML??
-		logger.debug('Found ' + cond.description + ':\n\t\t' + outerHTML + '\n\t' +
-			'This can cause poor performance on IE / Edge.');
-	});
-}
-
-/*
- - items in hazLangDefinition are element@list-of-attrs
- - if element is prefixed with '<' or '>' then it can be defined 
-    as an attribute on a normal HTML element. 
- - in preprocessing the attr is promoted to an element
-    either above or below the HTML element. 
- - the attr value is used as the "default" attr of the created element. 
-    The "default" attr is the first attr-name in the list-of-attrs.  
- - the order of items in hazLangDefinition is the order of promoting 
-    attrs to elements.
-*/
-var hazLangDefinition = 
-	'<otherwise <when@test <each@select,var <if@test <unless@test ' +
-	'>choose <template@name >eval@select >mtext@select >text@select include@name';
-
-var hazLang = _.map(_.words(hazLangDefinition), function(def) {
-	def = def.split('@');
-	var tag = def[0];
-	var attrToElement = tag.charAt(0);
-	switch (attrToElement) {
-	default: 
-		attrToElement = false; 
-		break;
-	case '<': case '>': 
-		break;
-	}
-	if (attrToElement) tag = tag.substr(1);
-	var attrs = def[1];
-	attrs = (attrs && attrs !== '') ? attrs.split(',') : [];
-	return {
-		tag: tag,
-		attrToElement: attrToElement,
-		attrs: attrs
-	}
-});
-
-var hazLangLookup = {};
-
-_.forEach(hazLang, function(directive) {
-	var tag = directive.tag; 
-	hazLangLookup[tag] = directive;
-});
-
-function walkTree(root, skipRoot, callback) { // always "accept" element nodes
-	var walker = document.createNodeIterator(
-			root,
-			1,
-			acceptNode,
-			null // IE9 throws if this irrelavent argument isn't passed
-		);
-	
-	var el;
-	while (el = walker.nextNode()) callback(el);
-
-	function acceptNode(el) {
-		if (skipRoot && el === root) return NodeFilter.FILTER_SKIP;
-		return NodeFilter.FILTER_ACCEPT;
-	}
-}
-
-function childNodesToFragment(el) {
-	var doc = el.ownerDocument;
-	var frag = doc.createDocumentFragment();
-	_.forEach(_.map(el.childNodes), function(child) { frag.appendChild(child); });
-	return frag;
-}
-
-function htmlToFragment(html, doc) {
-	if (!doc) doc = document;
-	var div = doc.createElement('div');
-	div.innerHTML = html;
-	var result = childNodesToFragment(div);
-	return result;
-}
-
-function HazardProcessor(options, frameset, filters) {
-	this.frameset = frameset;
-	this.filters = filters;
-	frameset.addDefaultNamespace(hazDefaultNS);
-	frameset.addDefaultNamespace(exprDefaultNS);
-	frameset.addDefaultNamespace(mexprDefaultNS);
-}
-
-_.defaults(HazardProcessor.prototype, {
-	
-loadTemplate: function(template) {
-	var processor = this;
-	processor.root = template; // FIXME assert template is Fragment
-	processor.templates = {};
-
-	var framesetDef = processor.frameset;
-	var hazPrefix = framesetDef.lookupPrefix(HAZARD_TRANSFORM_URN);
-	var exprPrefix = framesetDef.lookupPrefix(HAZARD_EXPRESSION_URN);
-	var mexprPrefix = framesetDef.lookupPrefix(HAZARD_MEXPRESSION_URN);
-
-	var exprHtmlAttr = exprPrefix + htmlAttr; // NOTE this is mapped to haz:eval
-	var hazEvalTag = hazPrefix + 'eval';
-	var mexprHtmlAttr = mexprPrefix + htmlAttr; // NOTE this is invalid
-
-	var mexprTextAttr = mexprPrefix + textAttr; // NOTE this is mapped to haz:mtext
-	var hazMTextTag = hazPrefix + 'mtext';
-	var exprTextAttr = exprPrefix + textAttr; // NOTE this is mapped to haz:text
-	var hazTextTag = hazPrefix + 'text';
-
-	// FIXME extract exprToHazPriority from hazLang
-	var exprToHazPriority = [ exprHtmlAttr, mexprTextAttr, exprTextAttr ];
-	var exprToHazMap = {};
-	exprToHazMap[exprHtmlAttr] = hazEvalTag;
-	exprToHazMap[mexprTextAttr] = hazMTextTag;
-	exprToHazMap[exprTextAttr] = hazTextTag;
-
-	var doc = template.ownerDocument;
-
-	// rewrite the template if necessary
-	walkTree(template, true, function(el) {
-		var tag = DOM.getTagName(el);
-		if (tag.indexOf(hazPrefix) === 0) return;
-
-		// pre-process @expr:_html -> @haz:eval, etc
-		_.forEach(exprToHazPriority, function(attr) {
-			if (!el.hasAttribute(attr)) return;
-			var tag = exprToHazMap[attr];
-			var val = el.getAttribute(attr);
-			el.removeAttribute(attr);
-			el.setAttribute(tag, val);
-		});
-
-		if (el.hasAttribute(mexprHtmlAttr)) {
-			logger.warn('Removing unsupported @' + mexprHtmlAttr);
-			el.removeAttribute(mexprHtmlAttr);
-		}
-
-		// promote applicable hazard attrs to elements
-		_.forEach(hazLang, function(def) {
-			if (!def.attrToElement) return;
-			var nsTag = hazPrefix + def.tag;
-			if (!el.hasAttribute(nsTag)) return;
-
-			// create <haz:element> ...
-			var directiveEl = doc.createElement(nsTag);
-			// with default attr set from @haz:attr on original element
-			var defaultAttr = def.attrs[0];
-			var value = el.getAttribute(nsTag);
-			el.removeAttribute(nsTag);
-			if (defaultAttr) directiveEl.setAttribute(defaultAttr, value);
-
-			// copy non-default hazard attrs
-			_.forEach(def.attrs, function(attr, i) {
-				if (i === 0) return; // the defaultAttr
-				var nsAttr = hazPrefix + attr;
-				if (!el.hasAttribute(nsAttr)) return;
-				var value = el.getAttribute(nsAttr);
-				el.removeAttribute(nsAttr);
-				directiveEl.setAttribute(attr, value);
-			});
-			// insert the hazard element goes below or above the current element
-			switch (def.attrToElement) {
-			case '>':
-				var frag = childNodesToFragment(el);
-				directiveEl.appendChild(frag);
-				el.appendChild(directiveEl);
-				break;
-			case '<':
-				el.parentNode.replaceChild(directiveEl, el);
-				directiveEl.appendChild(el);
-				break;
-			default:
-				break;
-			}
-		});
-	});
-	
-	walkTree(template, true, function(el) {
-		var tag = DOM.getTagName(el);
-		if (tag === hazPrefix + 'template') markTemplate(el);
-		if (tag === hazPrefix + 'choose') implyOtherwise(el);
-	});
-
-	// finally, preprocess all elements to extract hazardDetails
-	walkTree(template, true, function(el) {
-		el.hazardDetails = getHazardDetails(el, processor.frameset);
-	});
-	
-	if (logger.LOG_LEVEL < logger.levels.indexOf('debug')) return;
-
-	// if debugging then warn about PERFORMANCE_UNFRIENDLY_CONDITIONS (IE11 / Edge)
-	var hfNS = processor.frameset.namespace;
-	walkTree(template, true, function(el) {
-		var tag = DOM.getTagName(el);
-		if (tag.indexOf(hazPrefix) === 0) return;
-		if (tag.indexOf(hfNS.prefix) === 0) return; // HyperFrameset element
-		checkElementPerformance(el, framesetDef);
-	});
-
-
-	function markTemplate(el) {
-		if (!el.hasAttribute('name')) return;
-		var name = el.getAttribute('name');
-		processor.templates[name] = el;
-	}
-
-	function implyOtherwise(el) { // NOTE this slurps *any* non-<haz:when>, including <haz:otherwise>
-		var otherwise = el.ownerDocument.createElement(hazPrefix + 'otherwise');
-		_.forEach(_.map(el.childNodes), function(node) {
-			var tag = DOM.getTagName(node);
-			if (tag === hazPrefix + 'when') return;
-			otherwise.appendChild(node);
-		});
-		el.appendChild(otherwise);
-	}
-
-},
-
-transform: FRAGMENTS_ARE_INERT ?
-function(provider, details) { // TODO how to use details
-	var processor = this;
-	processor.provider = provider;
-	var root = processor.root;
-	var doc = root.ownerDocument;
-	var frag = doc.createDocumentFragment();
-	var done = processor.transformChildNodes(root, null, {}, frag);
-	return Promise.resolve(done)
-	.then(function(result) {
-		return frag;
-	});
-} :
-
-// NOTE IE11, Edge needs a different transform() because fragments are not inert
-function(provider, details) {
-	var processor = this;
-	processor.provider = provider;
-	var root = processor.root;
-	var doc = DOM.createHTMLDocument('', root.ownerDocument);
-	var frag = doc.body; // WARN don't know why this is inert but fragments aren't
-	var done = processor.transformChildNodes(root, null, {}, frag);
-	return Promise.resolve(done)
-	.then(function(result) {
-		frag = childNodesToFragment(frag);
-		return frag;
-	});
-},
-
-transformChildNodes: function(srcNode, context, variables, frag) {
-	var processor = this;
-
-	return Promise.reduce(null, srcNode.childNodes, function(dummy, current) {
-		return processor.transformNode(current, context, variables, frag);
-	});
-},
-
-transformNode: function(srcNode, context, variables, frag) {
-	var processor = this;
-
-	switch (srcNode.nodeType) {
-	default: 
-		var node = srcNode.cloneNode(true);
-		frag.appendChild(node);
-		return;
-	case 3: // NOTE text-nodes are special-cased for perf testing
-		var node = srcNode.cloneNode(true);
-		frag.appendChild(node);
-		return;
-	case 1:
-		var details = srcNode.hazardDetails;
-		if (details.definition) return processor.transformHazardTree(srcNode, context, variables, frag);
-		else return processor.transformTree(srcNode, context, variables, frag);
-	}
-},
-
-transformHazardTree: function(el, context, variables, frag) {
-	var processor = this;
-	var doc = el.ownerDocument;
-
-	var details = el.hazardDetails;
-	var def = details.definition;
-
-	var invertTest = false; // for haz:if haz:unless
-
-	switch (def.tag) {
-	default: // for unknown (or unhandled like `template`) haz: elements just process the children
-		return processor.transformChildNodes(el, context, variables, frag); 
-		
-	case 'include':
-		// FIXME attributes should already be in hazardDetails
-		var name = el.getAttribute('name');
-		template = processor.templates[name];
-		if (!template) {
-			logger.warn('Hazard could not find template name=' + name);
-			return frag;
-		}
-	
-		return processor.transformChildNodes(template, context, variables, frag); 
-
-	case 'eval':
-		// FIXME attributes should already be in hazardDetails
-		// FIXME log a warning if this directive has children
-		var selector = el.getAttribute('select');
-		var value = evalExpression(selector, processor.filters, processor.provider, context, variables, 'node');
-		var type = typeof value;
-		if (type === 'undefined' || type === 'boolean' || value == null) return;
-		if (!value.nodeType) { // TODO test performance
-			value = htmlToFragment(value, doc);
-		}
-		frag.appendChild(value);
-		return;
-
-	case 'mtext':
-		// FIXME attributes should already be in hazardDetails
-		// FIXME log a warning if this directive has children
-		var mexpr = el.getAttribute('select');
-		var value = evalMExpression(mexpr, processor.filters, processor.provider, context, variables);
-		// FIXME `value` should always already be "text"
-		if (type === 'undefined' || type === 'boolean' || value == null) return;
-		if (!value.nodeType) {
-			value = doc.createTextNode(value);
-		}
-		frag.appendChild(value);
-		return;
-
-	case 'text':
-		// FIXME attributes should already be in hazardDetails
-		// FIXME log a warning if this directive has children
-		var expr = el.getAttribute('select');
-		var value = evalExpression(expr, processor.filters, processor.provider, context, variables, 'text');
-		// FIXME `value` should always already be "text"
-		var type = typeof value;
-		if (type === 'undefined' || type === 'boolean' || value == null) return;
-		if (!value.nodeType) {
-			value = doc.createTextNode(value);
-		}
-		frag.appendChild(value);
-		return;
-
-	case 'unless':
-		invertTest = true;
-	case 'if':
-		// FIXME attributes should already be in hazardDetails
-		var testVal = el.getAttribute('test');
-		var pass = false;
-		try {
-			pass = evalExpression(testVal, processor.filters, processor.provider, context, variables, 'boolean');
-		}
-		catch (err) {
-			Task.postError(err);
-			logger.warn('Error evaluating <haz:if test="' + testVal + '">. Assumed false.');
-			pass = false;
-		}
-		if (invertTest) pass = !pass;
-		if (!pass) return;
-		return processor.transformChildNodes(el, context, variables, frag); 
-
-	case 'choose':
-		// FIXME attributes should already be in hazardDetails
- 		// NOTE if no successful `when` then chooses *first* `otherwise` 		
-		var otherwise;
-		var when;
-		var found = _.some(el.childNodes, function(child) { // TODO .children??
-			if (child.nodeType !== 1) return false;
-			var childDef = child.hazardDetails.definition;
-			if (!childDef) return false;
-			if (childDef.tag === 'otherwise') {
-				if (!otherwise) otherwise = child;
-				return false;
-			}
-			if (childDef.tag !== 'when') return false;
-			var testVal = child.getAttribute('test');
-			var pass = evalExpression(testVal, processor.filters, processor.provider, context, variables, 'boolean');
-			if (!pass) return false;
-			when = child;
-			return true;
-		});
-		if (!found) when = otherwise;
-		if (!when) return;
-		return processor.transformChildNodes(when, context, variables, frag); 
-
-	case 'each':
-		// FIXME attributes should already be in hazardDetails
-		var selector = el.getAttribute('select');
-		var varName = el.getAttribute('var');
-		var subVars = _.defaults({}, variables);
-		var subContexts;
-		try {
-			subContexts = processor.provider.evaluate(selector, context, variables, true);
-		}
-		catch (err) {
-			Task.postError(err);
-			logger.warn('Error evaluating <haz:each select="' + selector + '">. Assumed empty.');
-			return;
-		}
-
-		return Promise.reduce(null, subContexts, function(dummy, subContext) {
-			if (varName) subVars[varName] = subContext;
-			return processor.transformChildNodes(el, subContext, subVars, frag);
-		});
-
-	}
-			
-},
-
-transformTree: function(srcNode, context, variables, frag) { // srcNode is Element
-	var processor = this;
-	
-	var nodeType = srcNode.nodeType;
-	if (nodeType !== 1) throw Error('transformTree() expects Element');
-	var node = processor.transformSingleElement(srcNode, context, variables);
-	var nodeAsFrag = frag.appendChild(node); // WARN use returned value not `node` ...
-	// ... this allows frag to be a custom object, which in turn 
-	// ... allows a different type of output construction
-
-	return processor.transformChildNodes(srcNode, context, variables, nodeAsFrag);
-},
-
-transformSingleElement: function(srcNode, context, variables) {
-	var processor = this;
-	var details = srcNode.hazardDetails;
-
-	el = srcNode.cloneNode(false);
-
-	_.forEach(details.exprAttributes, function(desc) {
-		var value;
-		try {
-			value = (desc.namespaceURI === HAZARD_MEXPRESSION_URN) ?
-				processMExpression(desc.mexpression, processor.filters, processor.provider, context, variables) :
-				processExpression(desc.expression, processor.filters, processor.provider, context, variables, desc.type);
-		}
-		catch (err) {
-			Task.postError(err);
-			logger.warn('Error evaluating @' + desc.attrName + '="' + desc.expression + '". Assumed false.');
-			value = false;
-		}
-		setAttribute(el, desc.attrName, value);
-	});
-
-	return el;
-}
-
-});
-
-function getHazardDetails(el, namespaces) {
-	var details = {};
-	var tag = DOM.getTagName(el);
-	var hazPrefix = namespaces.lookupPrefix(HAZARD_TRANSFORM_URN);
-	var isHazElement = tag.indexOf(hazPrefix) === 0;
-
-	if (isHazElement) { // FIXME preprocess attrs of <haz:*>
-		tag = tag.substr(hazPrefix.length);
-		var def = hazLangLookup[tag];
-		details.definition = def || { tag: '' };
-	}
-
-	details.exprAttributes = getExprAttributes(el, namespaces);
-	return details;
-}
-
-function getExprAttributes(el, namespaces) {
-	var attrs = [];
-	
-	var exprNS = namespaces.lookupNamespace(HAZARD_EXPRESSION_URN);
-	var mexprNS = namespaces.lookupNamespace(HAZARD_MEXPRESSION_URN);
-	_.forEach(_.map(el.attributes), function(attr) {
-		var ns = _.find([ exprNS, mexprNS ], function(ns) {
-			return (attr.name.indexOf(ns.prefix) === 0);
-		});
-		if (!ns) return;
-		var prefix = ns.prefix;
-		var namespaceURI = ns.urn;
-		var attrName = attr.name.substr(prefix.length);
-		el.removeAttribute(attr.name);
-		var desc = {
-			namespaceURI: namespaceURI,
-			prefix: prefix,
-			attrName: attrName,
-			type: 'text'
-		}
-		switch (namespaceURI) {
-		case HAZARD_EXPRESSION_URN:
-			desc.expression = interpretExpression(attr.value);
-			break;
-		case HAZARD_MEXPRESSION_URN:
-			desc.mexpression = interpretMExpression(attr.value);
-			break;
-		default: // TODO an error?
-			break;
-		}
-		attrs.push(desc);
-	});
-	return attrs;
-}
-
-
-function setAttribute(el, attrName, value) {
-	var type = typeof value;
-	if (type === 'undefined' || type === 'boolean' || value == null) {
-		if (!value) el.removeAttribute(attrName);
-		else el.setAttribute(attrName, '');
-	}
-	else {
-		el.setAttribute(attrName, value.toString());
-	}
-}
-
-function evalMExpression(mexprText, filters, provider, context, variables) {
-	var mexpr = interpretMExpression(mexprText);
-	var result = processMExpression(mexpr, filters, provider, context, variables);
-	return result;
-}
-
-function evalExpression(exprText, filters, provider, context, variables, type) {
-	var expr = interpretExpression(exprText);
-	var result = processExpression(expr, filters, provider, context, variables, type);
-	return result;
-}
-	
-function interpretMExpression(mexprText) {
-	var expressions = [];
-	var mexpr = mexprText.replace(/\{\{((?:[^}]|\}(?=\}\})|\}(?!\}))*)\}\}/g, function(all, expr) {
-		expressions.push(expr);
-		return '{{}}';
-	});
-
-	expressions = expressions.map(function(expr) { return interpretExpression(expr); });
-	return {
-		template: mexpr,
-		expressions: expressions
-	};
-}
-
-function interpretExpression(exprText) { // FIXME robustness
-	var expression = {};
-	expression.text = exprText;
-	var exprParts = exprText.split(/\s+\|\s+/);
-	expression.selector = exprParts.shift();
-	expression.filters = [];
-
-	_.forEach(exprParts, function(filterSpec) {
-		filterSpec = filterSpec.trim();
-		var text = filterSpec;
-		var m = text.match(/^([_a-zA-Z][_a-zA-Z0-9]*)\s*(:?)/);
-		if (!m) {
-			logger.warn('Syntax Error in filter call: ' + filterSpec);
-			return false;
-		}
-		var filterName = m[1];
-		var hasParams = m[2];
-		text = text.substr(m[0].length);
-		if (!hasParams && /\S+/.test(text)) {
-			logger.warn('Syntax Error in filter call: ' + filterSpec);
-			return false;
-		}
-
-		try {
-			var filterParams = (Function('return [' + text + '];'))();
-		}
-		catch (err) {
-			logger.warn('Syntax Error in filter call: ' + filterSpec);
-			return false;
-		}
-
-		expression.filters.push({
-			text: filterSpec,
-			name: filterName,
-			params: filterParams
-		});
-		return true;
-	});
-
-	return expression;
-}
-
-
-function processMExpression(mexpr, filters, provider, context, variables) {
-	var i = 0;
-	return mexpr.template.replace(/\{\{\}\}/g, function(all) {
-		return processExpression(mexpr.expressions[i++], filters, provider, context, variables, 'text');
-	});
-}
-
-function processExpression(expr, filters, provider, context, variables, type) { // FIXME robustness
-	var doc = (context && context.nodeType) ? // TODO which document
-		(context.nodeType === 9 ? context : context.ownerDocument) : 
-		document; 
-	var value = provider.evaluate(expr.selector, context, variables);
-
-	_.every(expr.filters, function(filter) {
-		if (value == null) value = '';
-		if (value.nodeType) {
-			if (value.nodeType === 1) value = value.textContent;
-			else value = '';
-		}
-		try {
-			value = filters.evaluate(filter.name, value, filter.params);
-			return true;
-		}
-		catch (err) {
-			Task.postError(err);
-			logger.warn('Failure processing filter call: "' + filter.text + '" with input: "' + value + '"');
-			value = '';
-			return false;
-		}
-	});
-
-	result = cast(value, type);
-	return result;
-
-	function cast(value, type) {
-		switch (type) {
-		case 'text':
-			if (value && value.nodeType) value = value.textContent;
-			break;
-		case 'node':
-			var frag = doc.createDocumentFragment();
-			if (value && value.nodeType) frag.appendChild(doc.importNode(value, true)); // NOTE no adoption
-			else {
-				var div = doc.createElement('div');
-				div.innerHTML = value;
-				var node;
-				while (node = div.firstChild) frag.appendChild(node); // NOTE no adoption
-			}
-			value = frag;
-			break;
-		case 'boolean':
-			if (value == null || value === false) value = false;
-			else value = true;
-			break;
-		default: // FIXME should never occur. logger.warn !?
-			if (value && value.nodeType) value = value.textContent;
-			break;
-		}
-		return value;
-	}
-
-
-}
-
-return HazardProcessor;	
-})();
-
-framer.registerProcessor('hazard', HazardProcessor);
-
-
-var CSSDecoder = (function() {
-
-function CSSDecoder(options, framesetDef) {}
-
-_.defaults(CSSDecoder.prototype, {
-
-init: function(node) {
-	this.srcNode = node;
-},
-
-evaluate: function(query, context, variables, wantArray) {
-	if (!context) context = this.srcNode;
-	var doc = context.nodeType === 9 ? context : context.ownerDocument; // FIXME which document??
-	var queryParts = query.match(/^\s*([^{]*)\s*(?:\{\s*([^}]*)\s*\}\s*)?$/);
-	var selector = queryParts[1];
-	var attr = queryParts[2];
-	var result;
-	if (wantArray) { // haz:each
-		result = findAll(context, selector, variables);
-	}
-	else {
-		var node = find(context, selector, variables);
-		result = node ? [ node ] : [];
-	}
-
-	if (attr) {
-		attr = attr.trim();
-		if (attr.charAt(0) === '@') attr = attr.substr(1);
-		_.forEach(result, function(node, i) {
-			result[i] = getAttr(node, attr);
-		});
-	}
-
-	return (wantArray) ? result : result[0];
-
-	function getAttr(node, attr) {
-		switch(attr) {
-		case null: case undefined: case '': return node;
-		case textAttr: 
-			return node.textContent;
-		case htmlAttr:
-			var frag = doc.createDocumentFragment();
-			_.forEach(node.childNodes, function(child) { 
-				frag.appendChild(doc.importNode(child, true)); // TODO does `child` really need to be cloned??
-			});
-			return frag;
-		default: 
-			return node.getAttribute(attr);
-		}
-	}
-
-}
-
-});
-
-function find(context, selectorGroup, variables) {
-	if (selectorGroup.trim() === '') return context;
-	var finalSelector = expandSelector(context, selectorGroup, variables);
-	return context.querySelector(finalSelector); // FIXME DOM.find
-}
-
-function findAll(context, selectorGroup, variables) {
-	if (selectorGroup.trim() === '') return [ context ];
-	var finalSelector = expandSelector(context, selectorGroup, variables);
-	return context.querySelectorAll(finalSelector); // FIXME DOM.findAll
-}
-
-var uidIndex = 0;
-function expandSelector(context, selectorGroup, variables) { // FIXME currently only implements `context` expansion
-	var isRoot = context.nodeType === 9 || context.nodeType === 11;
-	var id;
-	if (!isRoot) {
-		id = context.id;
-		if (!id) {
-			id = '__meeko_' + (uidIndex++) + '__';
-			context.id = id;
-		}
-	}
-	var selectors =	selectorGroup.split(',');
-	selectors = _.map(selectors, function(s) { return s.trim(); });
-	selectors = _.filter(selectors, function(s) {
-			switch(s.charAt(0)) {
-			case '+': case '~': return false; // FIXME warning or error
-			case '>': return (isRoot) ? false : true; // FIXME probably should be allowed even if isRoot
-			default: return true;
-			}
-		});
-	selectors = _.map(selectors, function(s) {
-			return (isRoot) ? s : '#' + id + ' ' + s;
-		});
-	
-	return selectors.join(', ');
-}
-
-return CSSDecoder;
-})();
-
-framer.registerDecoder('css', CSSDecoder);
-
-
-var Microdata = (function() {
-
-function intersects(a1, a2) { // TODO add to Meeko.stuff
-	return _.some(a1, function(i1) {
-		return _.some(a2, function(i2) { 
-			return i2 === i1; 
-		});
-	});
-}
-
-function walkTree(root, skipRoot, callback) { // callback(el) must return NodeFilter code
-	var walker = document.createNodeIterator(
-			root,
-			1,
-			acceptNode,
-			null // IE9 throws if this irrelavent argument isn't passed
-		);
-	
-	var el;
-	while (el = walker.nextNode());
-
-	function acceptNode(el) {
-		if (skipRoot && el === root) return NodeFilter.FILTER_SKIP;
-		return callback(el);
-	}
-}
-
-// TODO copied from DOMSprockets. Could be a generic "class"
-
-var nodeIdProperty = '__microdata__';
-var nodeCount = 0; // used to generated node IDs
-var nodeStorage = {}; // hash of storage for nodes, keyed off `nodeIdProperty`
-
-var uniqueId = function(node) {
-	var nodeId = node[nodeIdProperty];
-	if (nodeId) return nodeId;
-	nodeId = nodeCount++; // TODO stringify??
-	node[nodeIdProperty] = new String(nodeId); // NOTE so that node cloning in old IE doesn't copy the node ID property
-	return nodeId;
-}
-
-var setData = function(node, data) { // FIXME assert node is element
-	var nodeId = uniqueId(node);
-	nodeStorage[nodeId] = data;
-}
-
-var hasData = function(node) {
-	var nodeId = node[nodeIdProperty];
-	return !nodeId ? false : nodeId in nodeStorage;
-}
-
-var getData = function(node) { // TODO should this throw if no data?
-	var nodeId = node[nodeIdProperty];
-	if (!nodeId) return;
-	return nodeStorage[nodeId];
-}
-
-
-function getItems(rootNode, type) {
-	if (!hasData(rootNode)) parse(rootNode);
-
-	var scope = getData(rootNode);
-	var typeList = 
-		(typeof type === 'string') ? _.words(type.trim()) :
-		type && type.length ? type :
-		[];
-			
-	var resultList = [];
-
-	_.forEach(scope.properties.names, function(propName) {
-		var propList = scope.properties.namedItem(propName);
-		_.forEach(propList, function(prop) {
-			if (prop.isScope) [].push.apply(resultList, getItems(prop.element, typeList));
-		});
-	});
-
-	_.forEach(scope.childScopes, function(scope) {
-		if (!typeList.length || intersects(scope.type, typeList)) resultList.push(scope);
-		[].push.apply(resultList, getItems(scope.element, typeList));
-	});
-
-	// now convert descriptors back to nodes
-	_.forEach(resultList, function(desc, i) {
-		resultList[i] = desc.element;
-	});
-	return resultList;
-}
-
-function getProperties(el) {
-	if (!hasData(el)) return;
-	var desc = getData(el);
-	if (!desc.isScope) return;
-	return desc.properties;
-}
-
-function parse(rootNode) {
-	if (!rootNode) rootNode = document;
-	var desc = getScopeDesc(rootNode);
-}
-
-function getScopeDesc(scopeEl) {
-	if (hasData(scopeEl)) return getData(scopeEl);
-	
-	var scopeDesc = {
-		element: scopeEl,
-		isScope: true,
-		type: scopeEl.nodeType === 1 || _.words(scopeEl.getAttribute('itemtype')),
-		properties: createHTMLPropertiesCollection(),
-		childScopes: []
-	}
-
-	walkTree(scopeEl, true, function(el) {
-		var isScope = el.hasAttribute('itemscope');
-		var propName = el.getAttribute('itemprop');
-		if (!(isScope || propName)) return NodeFilter.FILTER_SKIP;
-		
-		var item = isScope ? getScopeDesc(el) : getPropDesc(el);
-		if (propName) scopeDesc.properties.addNamedItem(propName, el);
-		else scopeDesc.childScopes.push(el);
-
-		return isScope ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
-	});
-
-	setData(scopeEl, scopeDesc);
-	return scopeDesc;
-}
-	
-function getValue(el) {
-	if (hasData(el)) return getData(el).value;
-	var desc = getPropDesc(el);
-	setData(el, desc);
-	return desc.value;
-}
-
-function getPropDesc(el) {
-	if (hasData(el)) return getData(el);
-
-	var name = el.getAttribute('itemprop');
-	
-	var prop = {
-		name: name,
-		value: evaluate(el)
-	}
-	
-	setData(el, prop);
-	return prop;
-}
-
-function evaluate(el) {
-	var tagName = el.tagName.toLowerCase();
-	var attrName = valueAttr[tagName];
-	if (attrName) return el[attrName] || el.getAttribute(attrName);
-
-	return el;
-}
-
-function createHTMLPropertiesCollection() {
-	var list = [];
-	list.names = [];
-	list.nodeLists = {};
-	_.assign(list, HTMLPropertiesCollection.prototype);
-	return list;
-}
-
-var HTMLPropertiesCollection = function() {}
-_.assign(HTMLPropertiesCollection.prototype, {
-
-namedItem: function(name) {
-	return this.nodeLists[name];
-},
-
-addNamedItem: function(name, el) {
-	this.push(el);
-	if (!this.nodeLists[name]) {
-		this.nodeLists[name] = [];
-		this.names.push(name);
-	}
-	this.nodeLists[name].push(el);
-}
-
-});
-
-
-var valueAttr = {};
-_.forEach(_.words("meta@content link@href a@href area@href img@src video@src audio@src source@src track@src iframe@src embed@src object@data time@datetime data@value meter@value"), function(text) {
-	var m = text.split("@"), tagName = m[0], attrName = m[1];
-	valueAttr[tagName] = attrName;
-});
-
-
-return {
-
-getItems: getItems,
-getProperties: getProperties,
-getValue: getValue
-
-}
-
-})();
-
-
-var MicrodataDecoder = (function() {
-
-function MicrodataDecoder(options, framesetDef) {}
-
-_.defaults(MicrodataDecoder.prototype, {
-
-init: function(node) {
-	Microdata.getItems(node);
-	this.rootNode = node;
-},
-
-evaluate: function(query, context, variables, wantArray) {
-	if (!context) context = this.rootNode;
-
-	var query = query.trim();
-	var startAtRoot = false;
-	var baseSchema;
-	var pathParts;
-
-	if (query === '.') return (wantArray) ? [ context ] : context;
-
-	var m = query.match(/^(?:(\^)?\[([^\]]*)\]\.)/);
-	if (m && m.length) {
-		query = query.substr(m[0].length);
-		startAtRoot = !!m[1];
-		baseSchema = _.words(m[2].trim());
-	}
-	pathParts = _.words(query.trim());
-	
-	var nodes;
-	if (baseSchema) {
-		if (startAtRoot) context = this.view;
-		nodes = Microdata.getItems(context, baseSchema);	
-	}
-	else nodes = [ context ];
-
-	var resultList = nodes;
-	_.forEach(pathParts, function(relPath, i) {
-		var parents = resultList;
-		resultList = [];
-		_.forEach(parents, function(el) {
-			var props = Microdata.getProperties(el);
-			if (!props) return;
-			var nodeList = props.namedItem(relPath);
-			if (!nodeList) return;
-			[].push.apply(resultList, nodeList);
-		});
-	});
-
-	// now convert elements to values
-	resultList = _.map(resultList, function(el) {
-		var props = Microdata.getProperties(el);
-		if (props) return el;
-		return Microdata.getValue(el);
-	});
-
-	if (wantArray) return resultList;
-
-	return resultList[0];
-}
-
-});
-
-return MicrodataDecoder;
-})();
-
-framer.registerDecoder('microdata', MicrodataDecoder);
-
-
-var JSONDecoder = (function() { 
-// FIXME not really a JSON decoder since expects JSON input and 
-// doesn't use JSON paths
-
-function JSONDecoder(options, framesetDef) {}
-
-_.defaults(JSONDecoder.prototype, {
-
-init: function(object) {
-	if (typeof object !== 'object' || object === null) throw 'JSONDecoder cannot handle non-object';
-	this.object = object;
-},
-
-evaluate: function(query, context, variables, wantArray) {
-	if (!context) context = this.object;
-
-	var query = query.trim();
-	var pathParts;
-
-	if (query === '.') return (wantArray) ? [ context ] : context;
-
-	var m = query.match(/^\^/);
-	if (m && m.length) {
-		query = query.substr(m[0].length);
-		context = this.object;
-	}
-	pathParts = query.split('.');
-	
-	var resultList = [ context ];
-	_.forEach(pathParts, function(relPath, i) {
-		var parents = resultList;
-		resultList = [];
-		_.forEach(parents, function(item) {
-			var child = item[relPath];
-			if (child != null) {
-				if (Array.isArray(child)) [].push.apply(resultList, child);
-				else resultList.push(child);
-			}
-		});
-	});
-
-	if (wantArray) return resultList;
-
-	var value = resultList[0];
-	return value;
-}
-
-});
-
-return JSONDecoder;
-})();
-
-framer.registerDecoder('json', JSONDecoder);
-
-// FIXME filters need sanity checking
-framer.registerFilter('lowercase', function(value, text) {
-	return value.toLowerCase();
-});
-
-framer.registerFilter('uppercase', function(value, text) {
-	return value.toUpperCase();
-});
-
-framer.registerFilter('if', function(value, yep) {
-	return (!!value) ? yep : value;
-});
-
-framer.registerFilter('unless', function(value, nope) {
-	return (!value) ? nope : value;
-});
-
-framer.registerFilter('if_unless', function(value, yep, nope) {
-	return (!!value) ? yep : nope;
-});
-
-framer.registerFilter('map', function(value, dict) { // dict can be {} or []
-
-	if (Array.isArray(dict)) {
-		var patterns = _.filter(dict, function(item, i) { return !(i % 2); });
-		var results = _.filter(dict, function(item, i) { return !!(i % 2); });
-		_.some(patterns, function(pattern, i) {
-			// FIXME what if pattern not RegExp && not string??
-			if (!(pattern instanceof RegExp)) pattern = new RegExp('^' + pattern + '$');
-			if (!pattern.test(value)) return false;
-			value = results[i];
-			return true;
-		});
-		return value;
-	}
-
-	if (value in dict) return dict[value]; // TODO sanity check before returning
-	return value;
-});
-
-framer.registerFilter('match', function(value, pattern, yep, nope) {
-	// FIXME what if pattern not RegExp && not string??
-	if (!(pattern instanceof RegExp)) pattern = new RegExp('^' + pattern + '$'); // FIXME sanity TODO case-insensitive??
-	var bMatch = pattern.test(value);
-	if (yep != null && bMatch) return yep;
-	if (nope != null && !bMatch) return nope;
-	return bMatch;
-});
-
-framer.registerFilter('replace', function(value, pattern, text) {
-	return value.replace(pattern, text); // TODO sanity check before returning
-});
-
-if (_.dateFormat) framer.registerFilter('date', function(value, format, utc) {
-	return _.dateFormat(value, format, utc);
-});
-
-_.assign(classnamespace, {
-
-MainProcessor: MainProcessor,
-ScriptProcessor: ScriptProcessor,
-HazardProcessor: HazardProcessor,
-CSSDecoder: CSSDecoder,
-MicrodataDecoder: MicrodataDecoder,
-JSONDecoder: JSONDecoder
-
-});
-
-
-}).call(window, Meeko.framer);

@@ -1,5 +1,5 @@
 /*!
- * Copyright 2012-2014 Sean Hogan (http://meekostuff.net/)
+ * Copyright 2012-2016 Sean Hogan (http://meekostuff.net/)
  * Mozilla Public License v2.0 (http://mozilla.org/MPL/2.0/)
  */
 
@@ -24,7 +24,18 @@ var defaults = { // NOTE defaults also define the type of the associated config 
 var SELF_REL = 'self'; // TODO DRY with libHyperFrameset.js
 var FRAMESET_REL = 'frameset'; // ditto
 
+var window = this;
 var document = window.document;
+
+/*
+ ### console is required
+ */
+var console = window.console;
+if (!console || !console.log) return; // TODO should this throw
+if (!(console.info && console.warn && console.error)) {
+	console.log('Interception aborting: depends on console.warn');
+	return;
+}
 
 var vendorPrefix = "Meeko";
 
@@ -174,6 +185,7 @@ var SUPPORTS_MUTATION_OBSERVERS = (function() {
 /*
  ### JS utilities
  */
+var lc = function(str) { return str ? str.toLowerCase() : ''; }
 function some(a, fn, context) { 
 	for (var n=a.length, i=0; i<n; i++) if (fn.call(context, a[i], i, a)) return true;
 	return false;
@@ -187,41 +199,42 @@ var parseJSON = function(text) { // NOTE this allows code to run. This is a feat
 	catch (error) { return; }
 }
 
-
 /*
- ### logger defn and init
- */
-var logger = Meeko.logger || (Meeko.logger = new function() {
+ ### extend console
+	+ `console.logLevel` allows logging to be switched off
+	
+	NOTE:
+	+ this assumes log, info, warn, error are defined
+*/
 
-var levels = this.levels = words("none error warn info debug");
+if (!console.debug) console.debug = console.log;
+var logLevels = words('debug info warn error none'); // accept "all" as alias for "debug"
+forEach(logLevels, function(level) {
+	var _level = '_' + level;
+	if (!console[level]) return;
+	console[_level] = console[level];
+});
 
-forEach(levels, function(name, num) {
+var currentLogLevel = 'debug';
 
-levels[name] = num;
-this[name] = function() { this._log({ level: num, message: arguments }); }
-
-}, this);
-
-this._log = function(data) { 
-	if (data.level > this.LOG_LEVEL) return;
-	data.timeStamp = +(new Date);
-        data.message = [].join.call(data.message, " ");
-        if (this.write) this.write(data);
-}
-
-this.startTime = +(new Date);
-var padding = "      ";
-
-this.write = (window.console) && function(data) { 
-	var offset = padding + (data.timeStamp - this.startTime), 
-		first = offset.length-padding.length-1,
-		offset = offset.substring(first);
-	console.log(offset+"ms " + levels[data.level]+": " + data.message); 
-}
-
-this.LOG_LEVEL = levels[defaults['log_level']]; // DEFAULT. Options are read later
-
-}); // end logger defn
+Object.defineProperty(console, 'logLevel', {
+	get: function() { return currentLogLevel; },
+	set: function(newLevel) {
+		newLevel = lc(newLevel);
+		if (newLevel === 'all') newLevel = 'debug'
+		if (logLevels.indexOf(newLevel) < 0) return; // WARN??
+		if (newLevel === currentLogLevel) return;
+		currentLogLevel = newLevel;
+		var found = false;
+		forEach(logLevels, function(level) {
+			var _level = '_' + level;
+			if (level === newLevel) found = true;
+			if (!console[_level] || !found) console[level] = function() {};
+			else console[level] = console[_level];
+		});
+		console.warn('Changed logLevel: ' + newLevel);
+	}
+});
 
 /*
  ### Get options
@@ -273,7 +286,7 @@ function addDataSource(name, key) {
 		var options = parseJSON(source.getItem(key));
 		if (options) dataSources.push( function(name) { return options[name]; } );
 	} catch(error) {
-		logger.warn(name + ' inaccessible');
+		console.warn(name + ' inaccessible');
 	}
 }
 
@@ -291,11 +304,11 @@ var getData = function(name, type) {
 			break;
 		case "number":
 			if (!isNaN(val)) data = 1 * val;
-			// TODO else logger.warn("incorrect config option " + val + " for " + name); 
+			// TODO else console.warn("incorrect config option " + val + " for " + name); 
 			break;
 		case "boolean":
 			data = val; // WARN this does NOT convert to Boolean
-			// if ([false, true, 0, 1].indexOf(val) < 0) logger.warn("incorrect config option " + val + " for " + name); 
+			// if ([false, true, 0, 1].indexOf(val) < 0) console.warn("incorrect config option " + val + " for " + name); 
 			break;
 		}
 		return (data !== null); 
@@ -331,6 +344,8 @@ function isSet(option) {
 
 // Don't even load HyperFrameset if "no_boot" is one of the search options (or true in Meeko.options)
 if (isSet('no_boot')) return;
+
+if (bootOptions['log_level']) console.logLevel = bootOptions["log_level"];
 
 /*
  ### DOM utilities
@@ -642,7 +657,7 @@ start: function(strict) {
 	var warnMsg = Capture.test(); // NOTE test() can also throw
 	if (warnMsg) {
 		if (strict) throw warnMsg;
-		else logger.warn(warnMsg);
+		else console.warn(warnMsg);
 	}
 	capturedHTML += getDocTypeTag(document); // WARN relies on document.doctype
 	capturedHTML += toStartTag(document.documentElement); // WARN relies on element.outerHTML
@@ -679,7 +694,7 @@ getDocument: function() { // WARN this assumes HyperFrameset is ready
 		});
 	})
 	.then(function(text) {
-		return Meeko.DOM.parseHTML(text, { url: document.URL, mustResolve: false });
+		return Meeko.htmlParser.parse(text, { url: document.URL, mustResolve: false });
 	});
 }
 
@@ -716,7 +731,7 @@ var bootScript;
 if (Meeko.bootScript) bootScript = Meeko.bootScript; // hook for meeko-panner
 else {
 	bootScript = Meeko.bootScript = getBootScript();
-	if (document.body) logger.warn("Boot-script SHOULD be in <head> and MUST NOT have @async or @defer");
+	if (document.body) console.warn("Boot-script SHOULD be in <head> and MUST NOT have @async or @defer");
 }
 
 
@@ -767,19 +782,19 @@ if (isSet('no_style')) {
 }
 
 var no_frameset = isSet('no_frameset');
-if (no_frameset) return; // TODO logger.info()
+if (no_frameset) return; // TODO console.info()
 if (!(history.pushState && SUPPORTS_XMLHTTPREQUEST && 'readyState' in document && 
 	SUPPORTS_REQUEST_ANIMATION_FRAME && SUPPORTS_MUTATION_OBSERVERS)) {
-	logger.debug('HyperFrameset depends on native XMLHttpRequest, history.pushState, and MutationObserver');
+	console.debug('HyperFrameset depends on native XMLHttpRequest, history.pushState, and MutationObserver');
 	return;
 }
 if (location.protocol === 'file:') {
 	if (!isSet('file_access_from_files')) {
-		logger.debug('HyperFrameset is not recommended for `file:` URLs. Aborting.');
+		console.debug('HyperFrameset is not recommended for `file:` URLs. Aborting.');
 		return;
 	}
 	else {
-		logger.warn('HyperFrameset is not recommended for `file:` URLs. Continuing anyway.');
+		console.warn('HyperFrameset is not recommended for `file:` URLs. Continuing anyway.');
 	}
 }
 
@@ -805,12 +820,8 @@ if (hidden_timeout > 0) {
 	setTimeout(Viewport.unhide, hidden_timeout);
 }
 
-var log_index = logger.levels[bootOptions["log_level"]];
-if (log_index != null) logger.LOG_LEVEL = log_index;
-
 function config() {
 	Meeko.DOM.ready = domReady;
-	Meeko.Promise.pollingInterval = bootOptions["polling_interval"];
 }
 
 function start() {
@@ -907,4 +918,4 @@ if (startup_timeout > 0) {
 	}, startup_timeout);
 }
 
-})();
+}).call(this);

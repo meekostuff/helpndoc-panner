@@ -75,9 +75,11 @@ a:hover {
 	window.bSearchDataLoaded = false;
 	var sHelpIdToActivate = '';
 
-	setTimeout(navInit, 5000);
+	$('body').click(function() {
+		HideKwPopup();
+	});
 
-	function navInit()
+	function SetupNav()
 	{
 		var sAnchorName = '';
 		try { sAnchorName = location.hash.substr(1); }
@@ -89,8 +91,12 @@ a:hover {
 			selected: nSelectedTab,
 			select: function(event, ui) { HideKwPopup(); }
 		});
-		
-		// Toc
+	}
+
+
+	function SetupToc() 
+	{
+			// Toc
 		if ($("#tree-toc").length) {
 			$("#tree-toc").dynatree({
 				clickFolderMode: 1,
@@ -112,7 +118,20 @@ a:hover {
 			// Select the active help id
 			if (sHelpIdToActivate != '') $("#tree-toc").dynatree("getTree").activateKey(sHelpIdToActivate);
 		}
-		
+	}
+	
+	function SelectTocItem(sHelpId)
+	{
+		if ($("#tree-toc").length && $("#tree-toc").dynatree && $("#tree-toc").dynatree("getTree") && $("#tree-toc").dynatree("getTree").getNodeByKey) {
+			$("#tree-toc").dynatree("getTree").getNodeByKey(sHelpId).activateSilently();
+		}
+		else {
+			sHelpIdToActivate = sHelpId;
+		}
+	}
+	
+	function SetupKw() 
+	{
 		// Keywords
 		
 		if ($("#tree-keywords").length) {
@@ -142,29 +161,8 @@ a:hover {
 			});
 			// Expand all nodes if required
 			}
-		
-		// Load search data
-		(function() {
-			var se = document.createElement('script'); se.type = 'text/javascript'; se.async = true;
-			se.src = 'js/hndsd.js';
-			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(se, s);
-		})();
 	}
-	
-	$('body').click(function() {
-		HideKwPopup();
-	});
-	
-	function SelectTocItem(sHelpId)
-	{
-		if ($("#tree-toc").length && $("#tree-toc").dynatree && $("#tree-toc").dynatree("getTree") && $("#tree-toc").dynatree("getTree").getNodeByKey) {
-			$("#tree-toc").dynatree("getTree").getNodeByKey(sHelpId).activateSilently();
-		}
-		else {
-			sHelpIdToActivate = sHelpId;
-		}
-	}
-	
+
 	function HideKwPopup()
 	{
 		if($("#popupMenu")) $("#popupMenu").remove();
@@ -207,6 +205,16 @@ a:hover {
 			$(oParentDiv).show();
 			return false;
 		}
+	}
+		
+	function SetupSearch()
+	{
+		// Load search data
+		(function() {
+			var se = document.createElement('script'); se.type = 'text/javascript'; se.async = true;
+			se.src = 'js/hndsd.js'; // TODO does this have to be hard-wired??
+			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(se, s);
+		})();
 	}
 	
 	function PerformSearch()
@@ -267,6 +275,16 @@ lookup: function(url, details) {
 
  
 <hf-frame src="scope:index.html">
+	<script for>
+	({
+		bodyEntered: function(frame, body) {
+			if (
+				!body.hasAttribute('condition') || 
+				/^loaded$/.test(body.getAttribute('condition'))
+			) SetupNav();
+		}
+	})
+	</script>
 	<hf-body>
 		<hf-transform type="hazard" format="css">
 
@@ -285,6 +303,16 @@ lookup: function(url, details) {
 		</ul>
 
 <hf-frame id="tab-toc" expr:src="a[rel=contents] {@href}" main="#topic_content">
+	<script for>
+	({
+		bodyEntered: function(frame, body) {
+			if (
+				!body.hasAttribute('condition') || 
+				/^loaded$/.test(body.getAttribute('condition'))
+			) SetupToc();
+		}
+	})
+	</script>
 	<hf-body>
 		<hf-transform type="hazard" format="css">
 <div id="tree-toc" expr:_html="ul">
@@ -294,6 +322,16 @@ lookup: function(url, details) {
 </hf-frame>
 
 <hf-frame id="tab-keywords" expr:src="a[rel=index] {@href}" main="#topic_content">
+	<script for>
+	({
+		bodyEntered: function(frame, body) {
+			if (
+				!body.hasAttribute('condition') || 
+				/^loaded$/.test(body.getAttribute('condition'))
+			) SetupKw();
+		}
+	})
+	</script>
 	<hf-body>
 		<hf-transform type="hazard" format="css">
 <div id="tree-keywords" expr:_html="ul">
@@ -303,6 +341,16 @@ lookup: function(url, details) {
 </hf-frame>
 
 <hf-frame id="tab-search" expr:src="a[rel=search] {@href}" main="#topic_content">
+	<script for>
+	({
+		bodyEntered: function(frame, body) {
+			if (
+				!body.hasAttribute('condition') || 
+				/^loaded$/.test(body.getAttribute('condition'))
+			) SetupSearch();
+		}
+	})
+	</script>
 	<hf-body>
 		<hf-transform type="main">
 		</hf-transform>
