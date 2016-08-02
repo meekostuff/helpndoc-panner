@@ -45,6 +45,10 @@ a:hover {
   font-weight: bold;
 }
 
+#popupMenu {
+	z-index: 999;
+}
+
 </style>
 
 <!-- toc and topic styles -->
@@ -76,7 +80,7 @@ a:hover {
 	var sHelpIdToActivate = '';
 
 	$('body').click(function() {
-		HideKwPopup();
+		HideKwPopup(0);
 	});
 
 	function SetupNav()
@@ -143,11 +147,10 @@ a:hover {
 					HideKwPopup();
 					if (node.data && node.data.click)
 					{
-						var aRefList = null;
-						eval('aRefList=' + node.data.click);
+						var aRefList = (Function('return ' + node.data.click))();
 						if (ShowKwPopup(node.li, aRefList))
 						{
-							return true;
+							return false;
 /*
 							if ($("#tree-toc") && $("#tree-toc").dynatree && $("#tree-toc").dynatree("getTree") && $("#tree-toc").dynatree("getTree").activateKey)
 								$("#tree-toc").dynatree("getTree").activateKey(null);
@@ -163,16 +166,17 @@ a:hover {
 			}
 	}
 
-	function HideKwPopup()
+	function HideKwPopup(delay)
 	{
-		if($("#popupMenu")) $("#popupMenu").remove();
+		if (delay == null) $('#popupMenu').remove(); 
+		else setTimeout(HideKwPopup, delay);
 	}
 	
 	function ShowKwPopup(oSender, aLinks)
 	{
 		HideKwPopup();
-		if (!aLinks || !aLinks.length || aLinks.length == 0) return false
-		else if (aLinks.length == 1) return true
+		if (!aLinks || !aLinks.length || aLinks.length == 0) return false;
+		else if (aLinks.length == 1) return false;
 		else
 		{
 			var oParentDiv = document.createElement("DIV");
@@ -182,7 +186,6 @@ a:hover {
 			oLink = document.createElement("SPAN");
 			oLink.className = "close-button";
 			oLink.innerHTML = "X";
-			oLink.href = "#";
 			oLink.onclick = HideKwPopup;
 			oParentDiv.appendChild(oLink);
 			// Items
@@ -192,7 +195,9 @@ a:hover {
 				oLink.innerHTML = aLinks[nCnt][0];
 				oLink.href = aLinks[nCnt][1];
 				//oLink.target = "FrameMain";
-				oLink.onclick = HideKwPopup;
+				// can't call HideKwPopup() immediately because 
+				// it breaks `requestnavigation` event bubbling
+				oLink.onclick = function() { HideKwPopup(0) };
 				oParentDiv.appendChild(oLink);
 			}
 			document.body.appendChild(oParentDiv);
@@ -203,7 +208,7 @@ a:hover {
 				"top": (pos.top + height + 5) + "px"
 			});
 			$(oParentDiv).show();
-			return false;
+			return true;
 		}
 	}
 		
