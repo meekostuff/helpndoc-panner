@@ -80,7 +80,7 @@ a:hover {
 	var sHelpIdToActivate = '';
 
 	$('body').click(function() {
-		setTimeout(function() { HideKwPopup(); });
+		setTimeout(function() { HideKwPopup(); }, 33);
 	});
 
 	function SetupNav()
@@ -107,11 +107,13 @@ a:hover {
 				debugLevel: 0,
 				imagePath: 'css/dynatree/chm/',
 				onActivate: function(node){
+					try {
+						$("#tree-keywords").dynatree("getTree").activateKey(null);
+					}
+					catch (err) { }
+
 					return true;
 /*
-					if ($("#tree-keywords").length && $("#tree-keywords").dynatree && $("#tree-keywords").dynatree("getTree") && $("#tree-keywords").dynatree("getTree").activateKey)
-						$("#tree-keywords").dynatree("getTree").activateKey(null);
-
 					if(node.data.href && node.data.href != '#'){
 						window.open(node.data.href, node.data.target);
 					}
@@ -126,10 +128,10 @@ a:hover {
 	
 	function SelectTocItem(sHelpId)
 	{
-		if ($("#tree-toc").length && $("#tree-toc").dynatree && $("#tree-toc").dynatree("getTree") && $("#tree-toc").dynatree("getTree").getNodeByKey) {
+		try {
 			$("#tree-toc").dynatree("getTree").getNodeByKey(sHelpId).activateSilently();
 		}
-		else {
+		catch (err) {
 			sHelpIdToActivate = sHelpId;
 		}
 	}
@@ -150,10 +152,13 @@ a:hover {
 						var aRefList = (Function('return ' + node.data.click))();
 						if (ShowKwPopup(node.li, aRefList))
 						{
+							try {
+								$("#tree-toc").dynatree("getTree").activateKey(null);
+							}
+							catch (err) { }
+
 							return false;
 /*
-							if ($("#tree-toc") && $("#tree-toc").dynatree && $("#tree-toc").dynatree("getTree") && $("#tree-toc").dynatree("getTree").activateKey)
-								$("#tree-toc").dynatree("getTree").activateKey(null);
 							if(node.data.href && node.data.href != '#'){
 								window.open(node.data.href, node.data.target);
 							}
@@ -196,7 +201,7 @@ a:hover {
 				//oLink.target = "FrameMain";
 				// can't call HideKwPopup() immediately because 
 				// it breaks `requestnavigation` event bubbling
-				oLink.onclick = function() { setTimeout(HideKwPopup }, 33); };
+				oLink.onclick = function() { setTimeout(HideKwPopup, 33); };
 				oParentDiv.appendChild(oLink);
 			}
 			document.body.appendChild(oParentDiv);
@@ -253,10 +258,12 @@ a:hover {
 				debugLevel: 0,
 				imagePath: 'css/dynatree/chm/',
 				onActivate: function(node){
-return true;
-/*
-					if ($("#search_results_content") && $("#search_results_content").dynatree && $("#search_results_content").dynatree("getTree") && $("#search_results_content").dynatree("getTree").activateKey)
+					try {
 						$("#search_results_content").dynatree("getTree").activateKey(null);
+					}
+					catch (err) { }
+					return true;
+/*
 					if(node.data.href && node.data.href != '#'){
 						window.open(node.data.href, node.data.target);
 					}
