@@ -80,7 +80,7 @@ a:hover {
 	var sHelpIdToActivate = '';
 
 	$('body').click(function() {
-		HideKwPopup(0);
+		setTimeout(function() { HideKwPopup(); });
 	});
 
 	function SetupNav()
@@ -166,10 +166,9 @@ a:hover {
 			}
 	}
 
-	function HideKwPopup(delay)
+	function HideKwPopup()
 	{
-		if (delay == null) $('#popupMenu').remove(); 
-		else setTimeout(HideKwPopup, delay);
+		$('#popupMenu').remove(); 
 	}
 	
 	function ShowKwPopup(oSender, aLinks)
@@ -197,7 +196,7 @@ a:hover {
 				//oLink.target = "FrameMain";
 				// can't call HideKwPopup() immediately because 
 				// it breaks `requestnavigation` event bubbling
-				oLink.onclick = function() { HideKwPopup(0) };
+				oLink.onclick = function() { setTimeout(HideKwPopup }, 33); };
 				oParentDiv.appendChild(oLink);
 			}
 			document.body.appendChild(oParentDiv);
