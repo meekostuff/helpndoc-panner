@@ -29,7 +29,10 @@ Click on the "Clone or download" button (near the top-right of the page).
 
 Click on the "Download ZIP" link in the popup.
 
-Unzip the downloaded file and move the extracted directory to your 
+Unzip the downloaded file and rename the extracted directory to 
+"HyperFrameset HTML Template".
+
+Move this directory to your 
 **HelpNDoc** customized HTML templates directory -
 "My Documents\Templates\html\".
 
