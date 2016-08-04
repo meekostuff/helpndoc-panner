@@ -856,11 +856,7 @@ var init = function(href, baseURL) {
 var keys = ['source','protocol','hostname','port','pathname','search','hash'];
 var parser = /^([^:\/?#]+:)?(?:\/\/([^:\/?#]*)(?::(\d*))?)?([^?#]*)?(\?[^#]*)?(#.*)?$/;
 
-var parse = ((typeof window.URL === 'function') && ('href' in window.URL.prototype)) ? 
-function(href) {
-	return new window.URL(href);
-} :
-function(href) {
+var parse = function(href) {
 	href = href.trim();
 	var m = parser.exec(href);
 	var url = {};
@@ -877,7 +873,7 @@ function enhance(url) {
 		url.host = url.hostname;
 		if (url.port) url.host += ':' + url.port;
 	}
-	if (!url.origin) url.origin = url.protocol + '//' + url.host;
+	if (!url.origin || url.origin === 'null') url.origin = url.protocol + '//' + url.host;
 	if (!url.pathname) url.pathname = '/';
 	var pathParts = url.pathname.split('/'); // creates an array of at least 2 strings with the first string empty: ['', ...]
 	pathParts.shift(); // leaves an array of at least 1 string [...]
