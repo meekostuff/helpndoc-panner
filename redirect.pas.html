@@ -1,11 +1,12 @@
 <%
 var
-	sProjectTitle, sDefaultTopicId, sProjectTopic, sProjectTopicId, sProjectFooter: string;
+	sProjectTitle, sDefaultTopicId, sDefaultTopicURL, sProjectTopic, sProjectTopicId, sProjectFooter: string;
 	
 begin
 	// Need BOM for UTF8 files
 	HndGeneratorInfo.BOMOutput := True;
 	
+	HndGeneratorInfo.CurrentFile := ExtractFileName(HndGeneratorInfo.OutputFile);
 	sProjectTitle := HndProjects.GetProjectTitle();
 	
 	// Try to get the default topic
@@ -14,7 +15,10 @@ begin
 	if (sDefaultTopicId = '') then
 		sDefaultTopicId := HndTopics.GetTopicNextVisible(HndTopics.GetProjectTopic());
 	if (sDefaultTopicId <> '') then
+	begin
 		sDefaultTopicId := HndTopics.GetTopicHelpId(sDefaultTopicId);
+		sDefaultTopicURL := format('%s.html', [sDefaultTopicId]);
+	end;
 	// footer
 	sProjectTopic := HndTopics.GetProjectTopic();
 	sProjectTopicId := 'index';
@@ -29,6 +33,7 @@ begin
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 	<script src="meeko-panner/boot.js" data-generator="helpndoc"></script>
     <meta name="generator" content="<% print(HTMLEncode(HndGeneratorInfo.HelpNDocVersion)); %>">
+		<meta http-equiv="refresh" content="0; <% print(sDefaultTopicURL); %>" />
     <title><% print(HTMLEncode(sProjectTitle)); %></title>
 	<link rel="stylesheet" type="text/css" href="basic.css" />
 </head>
@@ -62,11 +67,10 @@ begin
 	
 	<div id="topic_content">
 
-	<nav><ul>
-		<li><a rel="contents" href="toc.html"><% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocTitle'))); %></a></li>
-		<li><a rel="index" href="keywords.html"><% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocKeywordsTitle'))); %></a></li>
-		<li><a rel="search" href="search.html"><% print(HTMLEncode(HndGeneratorInfo.GetCustomSettingValue('TocSearchTitle'))); %></a></li>
-	</ul></nav>
+	<p>
+	Welcome to <a href="index.html"><% print(HTMLEncode(sProjectTitle)); %></a>. <br />
+	You will redirected to the <a href="<% print(sDefaultTopicURL); %>">start page</a> shortly.
+	</p>
 
 	</div>
 
