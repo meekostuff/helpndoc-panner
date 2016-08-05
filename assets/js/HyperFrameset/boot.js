@@ -245,7 +245,7 @@ Object.defineProperty(console, 'logLevel', {
 var useSessionOptions = (function() {
 	if (!('JSON' in window)) return false;
 	try {
-		if (!('sessionStorage' in window)) return false;
+		if (!window.sessionStorage) return false;
 	}
 	catch (error) {
 		return false;
